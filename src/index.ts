@@ -11,4 +11,15 @@
 </CHANGE_SUMMARY>
 */
 
-export {};
+export { loadConfig, ExtractConfigSchema } from "./config.js";
+export type {
+  ExtractConfig,
+  ExtractContext,
+  ExtractOptions,
+  PostProcessRule,
+  PostProcessAction,
+  CopyRule,
+  PatchRule,
+  DeleteRule,
+  GitConfig,
+} from "./types.js";

@@ -26,10 +26,10 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@wgogol/changelog-live": "workspace:*"
+    "@warpgogol/changelog-live": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "@wgogol/changelog-live": {
+    "@warpgogol/changelog-live": {
       "optional": true
     }
   },

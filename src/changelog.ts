@@ -27,7 +27,7 @@ export async function tryGenerateChangelog(projectDir: string): Promise<Changelo
   }
 
   try {
-    const mod = await import("@wgogol/changelog-live");
+    const mod = await import("@warpgogol/changelog-live");
     const { loadConfig, generateChangelog } = mod;
     const config = await loadConfig(changelogConfigPath);
     config.git.repoRoot = path.resolve(projectDir, config.git.repoRoot);
@@ -51,7 +51,7 @@ export async function tryAiCommitMessage(dest: string, projectDir: string): Prom
   if (!existsSync(changelogConfigPath)) return null;
 
   try {
-    const mod = await import("@wgogol/changelog-live");
+    const mod = await import("@warpgogol/changelog-live");
     const { loadConfig, getApiKey, collectCommits, PROVIDER_DEFAULT_MODELS } = mod;
     const config = await loadConfig(changelogConfigPath);
 

@@ -13,6 +13,7 @@
 
 export { loadConfig, ExtractConfigSchema } from "./config.js";
 export { extractProject } from "./extract.js";
+export { scanForSecrets } from "./scan.js";
 export type {
   ExtractConfig,
   ExtractContext,
@@ -23,4 +24,5 @@ export type {
   PatchRule,
   DeleteRule,
   GitConfig,
+  SecretFinding,
 } from "./types.js";

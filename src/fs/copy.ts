@@ -49,8 +49,14 @@ const MONOREPO_CONFIG_FILES = [
   ".dockerignore",
 ];
 
-export function isIgnored(name: string): boolean {
-  return IGNORE_DIRS.has(name) || IGNORE_FILES.has(name) || name.endsWith(".tsbuildinfo");
+export function isIgnored(name: string, extraIgnoreDirs?: string[]): boolean {
+  if (IGNORE_DIRS.has(name) || IGNORE_FILES.has(name) || name.endsWith(".tsbuildinfo")) {
+    return true;
+  }
+  if (extraIgnoreDirs && extraIgnoreDirs.includes(name)) {
+    return true;
+  }
+  return false;
 }
 
 export function isKeyMaterial(relPath: string): boolean {
@@ -87,6 +93,7 @@ export async function copyFiltered(
   srcRoot: string,
   destRoot: string,
   subDir: string = "",
+  extraIgnoreDirs?: string[],
 ): Promise<number> {
   const srcDir = path.join(srcRoot, subDir);
   const destDir = path.join(destRoot, subDir);
@@ -105,13 +112,13 @@ export async function copyFiltered(
 
     if (relPath.includes(".input" + path.sep + "batches")) continue;
 
-    if (isIgnored(name) || isKeyMaterial(relPath) || isDbFile(name)) continue;
+    if (isIgnored(name, extraIgnoreDirs) || isKeyMaterial(relPath) || isDbFile(name)) continue;
 
     const srcPath = path.join(srcDir, name);
     const destPath = path.join(destDir, name);
 
     if (entry.isDirectory()) {
-      count += await copyFiltered(srcRoot, destRoot, relPath);
+      count += await copyFiltered(srcRoot, destRoot, relPath, extraIgnoreDirs);
     } else if (entry.isFile()) {
       await copyFile(srcPath, destPath);
       count++;

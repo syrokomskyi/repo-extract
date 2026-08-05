@@ -52,6 +52,8 @@ export interface ExtractConfig {
   git?: GitConfig;
   copyDirs?: string[];
   standalone?: boolean;
+  ignoreDirs?: string[];
+  skipSecretScan?: boolean;
 }
 
 export interface ExtractContext {
@@ -65,4 +67,11 @@ export interface ExtractOptions {
   dest?: string;
   dryRun?: boolean;
   verbose?: boolean;
+}
+
+export interface SecretFinding {
+  file: string;
+  line: number;
+  name: string;
+  preview: string;
 }

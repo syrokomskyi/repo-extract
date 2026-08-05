@@ -37,6 +37,7 @@ import { discoverPackageDeps } from "./fs/discover.js";
 import { runPostProcess } from "./postprocess/index.js";
 import { commitExport } from "./fs/git.js";
 import { tryGenerateChangelog } from "./changelog.js";
+import { scanForSecrets } from "./scan.js";
 
 const HTML_LIMIT = 5;
 
@@ -172,7 +173,7 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
       console.log(`  skipped (not found): ${appDir}`);
       continue;
     }
-    const n = await copyFiltered(root, dest, appDir);
+    const n = await copyFiltered(root, dest, appDir, config.ignoreDirs);
     appFiles += n;
     console.log(`  copied ${n} files: ${appDir}`);
   }
@@ -187,7 +188,7 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
       console.log(`  skipped (not found): ${pkgDir}`);
       continue;
     }
-    const n = await copyFiltered(root, dest, pkgDir);
+    const n = await copyFiltered(root, dest, pkgDir, config.ignoreDirs);
     pkgFiles += n;
     console.log(`  copied ${n} files: ${pkgDir}`);
   }
@@ -257,6 +258,24 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
   console.log(`  destination: ${dest}`);
   console.log(`  apps files:  ${appFiles}`);
   console.log(`  package files: ${pkgFiles}`);
+
+  // 15b. Secret scan — abort before git commit if secrets found
+  if (!config.skipSecretScan) {
+    console.log("Scanning for secrets...");
+    const findings = await scanForSecrets(dest);
+    if (findings.length > 0) {
+      console.error(`\n!!! ABORTED: ${findings.length} secret(s) detected in export !!!`);
+      for (const f of findings) {
+        console.error(`  ${f.file}:${f.line} — ${f.name}`);
+        console.error(`    ${f.preview}`);
+      }
+      console.error(
+        "\nExport aborted. Fix the source files or add directories to ignoreDirs in config.",
+      );
+      process.exit(1);
+    }
+    console.log("  no secrets found");
+  }
 
   // 16. Git commit + push
   await commitExport(dest, changelogCommitMessage, config.git);
@@ -330,6 +349,24 @@ async function exportStandalonePackage(
   console.log("");
   console.log("=== Export complete ===");
   console.log(`  destination: ${dest}`);
+
+  // 6b. Secret scan — abort before git commit if secrets found
+  if (!config.skipSecretScan) {
+    console.log("Scanning for secrets...");
+    const findings = await scanForSecrets(dest);
+    if (findings.length > 0) {
+      console.error(`\n!!! ABORTED: ${findings.length} secret(s) detected in export !!!`);
+      for (const f of findings) {
+        console.error(`  ${f.file}:${f.line} — ${f.name}`);
+        console.error(`    ${f.preview}`);
+      }
+      console.error(
+        "\nExport aborted. Fix the source files or add directories to ignoreDirs in config.",
+      );
+      process.exit(1);
+    }
+    console.log("  no secrets found");
+  }
 
   // 7. Git commit + push
   await commitExport(dest, changelogCommitMessage, config.git);

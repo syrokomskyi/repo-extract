@@ -63,6 +63,8 @@ const ExtractConfigSchema = z.object({
   git: GitConfigSchema.optional(),
   copyDirs: z.array(z.string()).optional(),
   standalone: z.boolean().default(false),
+  ignoreDirs: z.array(z.string()).optional(),
+  skipSecretScan: z.boolean().optional(),
 });
 
 export async function loadConfig(configPath: string): Promise<ExtractConfig> {

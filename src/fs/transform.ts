@@ -456,7 +456,12 @@ export async function fixStandalonePackageJson(dest: string): Promise<void> {
   for (const depField of ["dependencies", "devDependencies", "peerDependencies"]) {
     if (pkg[depField]) {
       for (const key of Object.keys(pkg[depField])) {
-        if (
+        if (depField === "peerDependencies") {
+          if (pkg[depField][key] === "workspace:*") {
+            pkg[depField][key] = "*";
+            changed = true;
+          }
+        } else if (
           key.startsWith("@wgogol/") ||
           (key.startsWith("@warpgogol/") && key !== "@warpgogol/repo-extract")
         ) {

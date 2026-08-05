@@ -102,6 +102,30 @@ describe("fixStandalonePackageJson", () => {
     expect(result.devDependencies).toHaveProperty("vitest");
   });
 
+  it("preserves @warpgogol/* in peerDependencies (only converts workspace:*)", async () => {
+    const pkg = {
+      name: "@warpgogol/test",
+      peerDependencies: {
+        "@warpgogol/changelog-live": "workspace:*",
+      },
+      peerDependenciesMeta: {
+        "@warpgogol/changelog-live": { optional: true },
+      },
+      devDependencies: {
+        "@warpgogol/changelog-live": "workspace:*",
+      },
+    };
+    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+
+    await fixStandalonePackageJson(tmpDir);
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    expect(result.peerDependencies).toHaveProperty("@warpgogol/changelog-live");
+    expect(result.peerDependencies["@warpgogol/changelog-live"]).toBe("*");
+    expect(result.peerDependenciesMeta).toBeDefined();
+    expect(result.devDependencies).toBeUndefined();
+  });
+
   it("does not modify already-standalone test scripts", async () => {
     const pkg = {
       name: "@warpgogol/test",

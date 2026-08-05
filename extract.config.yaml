@@ -5,6 +5,8 @@ projectDir: packages/repo-extract
 destName: repo-extract
 standalone: true
 
+skipSecretScan: true
+
 git:
   remote: git@github.com:syrokomskyi/repo-extract.git
-  autoPush: false
+  autoPush: true

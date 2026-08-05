@@ -108,6 +108,7 @@ describe("fixStandalonePackageJson", () => {
       scripts: {
         test: "vitest run",
       },
+      packageManager: "pnpm@10.33.0",
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 

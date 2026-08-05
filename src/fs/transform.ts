@@ -473,9 +473,14 @@ export async function fixStandalonePackageJson(dest: string): Promise<void> {
     }
   }
 
+  if (!pkg.packageManager) {
+    pkg.packageManager = "pnpm@10.33.0";
+    changed = true;
+  }
+
   if (changed) {
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
-    console.log("  fixed standalone package.json (test script, workspace deps)");
+    console.log("  fixed standalone package.json (test script, workspace deps, packageManager)");
   }
 }
 

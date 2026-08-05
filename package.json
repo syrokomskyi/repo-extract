@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "description": "Extract apps and packages from a TurboRepo monorepo into standalone public repositories",
   "license": "Apache-2.0",
+  "author": "Andrii Syrokomskyi <andrii@syrokomskyi.com> (https://syrokomskyi.com)",
+  "homepage": "https://github.com/syrokomskyi/repo-extract#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/syrokomskyi/repo-extract.git"
+  },
+  "bugs": {
+    "url": "https://github.com/syrokomskyi/repo-extract/issues"
+  },
+  "keywords": ["monorepo", "turborepo", "extract", "export", "standalone", "publish", "automation"],
   "type": "module",
   "bin": {
     "repo-extract": "dist/cli.js"
@@ -15,12 +25,20 @@
       "import": "./dist/index.js"
     }
   },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": ["dist", "!**/*.tsbuildinfo"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm --dir ../../.. exec vitest run --config packages/repo-extract/vitest.config.ts",
+    "test": "vitest run",
     "changelog": "changelog-live",
-    "changelog:init": "changelog-live init"
+    "changelog:init": "changelog-live init",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
     "commander": "^15.0.0",

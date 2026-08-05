@@ -74,8 +74,6 @@ async function scanFile(root: string, filePath: string, findings: SecretFinding[
     pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(content)) !== null) {
-      const before = content[match.index - 1];
-      if (before === '"' || before === "'" || before === "`") continue;
       const lineNum = content.slice(0, match.index).split("\n").length;
       const line = lines[lineNum - 1] ?? "";
       const preview = line.length > 120 ? line.slice(0, 120) + "..." : line;

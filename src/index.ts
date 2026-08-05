@@ -12,6 +12,7 @@
 */
 
 export { loadConfig, ExtractConfigSchema } from "./config.js";
+export { extractProject } from "./extract.js";
 export type {
   ExtractConfig,
   ExtractContext,

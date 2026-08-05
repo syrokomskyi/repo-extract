@@ -1,0 +1,42 @@
+{
+  "name": "@warpgogol/repo-extract",
+  "version": "0.1.0",
+  "description": "Extract apps and packages from a TurboRepo monorepo into standalone public repositories",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "repo-extract": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --dir ../../.. exec vitest run --config packages/repo-extract/vitest.config.ts"
+  },
+  "dependencies": {
+    "commander": "^12.2.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@wgogol/changelog-live": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@wgogol/changelog-live": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.5",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

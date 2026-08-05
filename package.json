@@ -18,7 +18,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm --dir ../../.. exec vitest run --config packages/repo-extract/vitest.config.ts"
+    "test": "pnpm --dir ../../.. exec vitest run --config packages/repo-extract/vitest.config.ts",
+    "changelog": "changelog-live",
+    "changelog:init": "changelog-live init"
   },
   "dependencies": {
     "commander": "^15.0.0",
@@ -35,6 +37,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@warpgogol/changelog-live": "workspace:*",
     "tsx": "^4.23.5",
     "typescript": "6.0.3",
     "vitest": "4.1.10"

@@ -29,13 +29,16 @@ import {
   findPackageJsonFiles,
   fixAppTsconfigs,
   fixPackageTsconfigs,
+  fixStandalonePackageJson,
+  fixStandaloneVitestConfig,
+  generateCiWorkflow,
   generateRootFiles,
   regenerateTsconfigBase,
   transformPackageJson,
 } from "./fs/transform.js";
 import { discoverPackageDeps } from "./fs/discover.js";
 import { runPostProcess } from "./postprocess/index.js";
-import { commitExport } from "./fs/git.js";
+import { commitExport, transferGitHistory } from "./fs/git.js";
 import { tryGenerateChangelog } from "./changelog.js";
 import { scanForSecrets } from "./scan.js";
 
@@ -252,6 +255,14 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
   console.log("Cleaning stray artifacts...");
   await cleanStrayArtifacts(dest);
 
+  // 14b. Generate CI workflow
+  console.log("Generating CI workflow...");
+  const { mkdir: ciMkdir, writeFile: ciWrite } = await import("node:fs/promises");
+  const ciDir = path.join(dest, ".github", "workflows");
+  await ciMkdir(ciDir, { recursive: true });
+  await ciWrite(path.join(ciDir, "ci.yml"), generateCiWorkflow());
+  console.log("  generated .github/workflows/ci.yml");
+
   // 15. Summary
   console.log("");
   console.log("=== Export complete ===");
@@ -277,7 +288,11 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
     console.log("  no secrets found");
   }
 
-  // 16. Git commit + push
+  // 16. Transfer git history (by path prefix)
+  const historyPrefixes = [config.projectDir, ...packageDirs];
+  await transferGitHistory(root, dest, historyPrefixes);
+
+  // 17. Git commit + push
   await commitExport(dest, changelogCommitMessage, config.git);
 }
 
@@ -341,9 +356,25 @@ async function exportStandalonePackage(
   await writeFile(path.join(dest, ".gitignore"), gitignoreContent);
   console.log("  wrote .gitignore");
 
+  // 4b. Fix standalone package.json (test script, workspace deps)
+  console.log("Fixing standalone package.json...");
+  await fixStandalonePackageJson(dest);
+
+  // 4c. Fix vitest.config.ts (relative test paths)
+  console.log("Fixing vitest.config.ts...");
+  await fixStandaloneVitestConfig(dest);
+
   // 5. Clean stray artifacts
   console.log("Cleaning stray artifacts...");
   await cleanStrayArtifacts(dest);
+
+  // 5b. Generate CI workflow
+  console.log("Generating CI workflow...");
+  const { mkdir: ciMkdir, writeFile: ciWrite } = await import("node:fs/promises");
+  const ciDir = path.join(dest, ".github", "workflows");
+  await ciMkdir(ciDir, { recursive: true });
+  await ciWrite(path.join(ciDir, "ci.yml"), generateCiWorkflow());
+  console.log("  generated .github/workflows/ci.yml");
 
   // 6. Summary
   console.log("");
@@ -368,6 +399,9 @@ async function exportStandalonePackage(
     console.log("  no secrets found");
   }
 
-  // 7. Git commit + push
+  // 7. Transfer git history (by path prefix)
+  await transferGitHistory(root, dest, [config.projectDir]);
+
+  // 8. Git commit + push
   await commitExport(dest, changelogCommitMessage, config.git);
 }

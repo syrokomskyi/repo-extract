@@ -287,6 +287,7 @@ export function buildRootPackageJson(destName: string): object {
       build: 'pnpm --recursive --filter "./apps/**" exec pnpm run build',
       typecheck: 'pnpm --recursive --filter "./apps/**" exec pnpm run typecheck',
       lint: 'pnpm --recursive --filter "./apps/**" exec pnpm run lint',
+      test: 'pnpm --recursive --filter "./apps/**" exec pnpm run --if-present test',
     },
     devDependencies: {
       "@eslint/js": "^10.0.1",
@@ -397,4 +398,100 @@ export async function cleanStrayArtifacts(dest: string): Promise<void> {
     }
   }
   await cleanDeep(dest);
+}
+
+export function generateCiWorkflow(): string {
+  return [
+    "name: CI",
+    "",
+    "on:",
+    "  push:",
+    "    branches: [main]",
+    "  pull_request:",
+    "",
+    "permissions:",
+    "  contents: read",
+    "",
+    "jobs:",
+    "  ci:",
+    "    runs-on: ubuntu-latest",
+    "    timeout-minutes: 15",
+    "    steps:",
+    "      - uses: actions/checkout@v5",
+    "      - uses: pnpm/action-setup@v6",
+    "      - uses: actions/setup-node@v5",
+    "        with:",
+    "          node-version: 22",
+    "          cache: pnpm",
+    "      - run: pnpm install --frozen-lockfile",
+    "      - run: pnpm run typecheck",
+    "      - run: pnpm run build",
+    "      - run: pnpm test",
+    "",
+  ].join("\n");
+}
+
+export async function fixStandalonePackageJson(dest: string): Promise<void> {
+  const pkgPath = path.join(dest, "package.json");
+  let raw: string;
+  try {
+    raw = await readFile(pkgPath, "utf-8");
+  } catch {
+    return;
+  }
+
+  const pkg = JSON.parse(raw);
+  let changed = false;
+
+  if (pkg.scripts?.test && typeof pkg.scripts.test === "string") {
+    if (
+      pkg.scripts.test.includes("--dir ../../..") ||
+      pkg.scripts.test.includes("--config packages/")
+    ) {
+      pkg.scripts.test = "vitest run";
+      changed = true;
+    }
+  }
+
+  for (const depField of ["dependencies", "devDependencies", "peerDependencies"]) {
+    if (pkg[depField]) {
+      for (const key of Object.keys(pkg[depField])) {
+        if (
+          key.startsWith("@wgogol/") ||
+          (key.startsWith("@warpgogol/") && key !== "@warpgogol/repo-extract")
+        ) {
+          delete pkg[depField][key];
+          changed = true;
+        } else if (pkg[depField][key] === "workspace:*") {
+          pkg[depField][key] = "*";
+          changed = true;
+        }
+      }
+      if (Object.keys(pkg[depField]).length === 0) {
+        delete pkg[depField];
+      }
+    }
+  }
+
+  if (changed) {
+    await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
+    console.log("  fixed standalone package.json (test script, workspace deps)");
+  }
+}
+
+export async function fixStandaloneVitestConfig(dest: string): Promise<void> {
+  const configPath = path.join(dest, "vitest.config.ts");
+  let raw: string;
+  try {
+    raw = await readFile(configPath, "utf-8");
+  } catch {
+    return;
+  }
+
+  const fixed = raw.replace(/["']packages\/[^/]+\/(tests\/\*\*\/\*\.test\.ts)["']/g, '"$1"');
+
+  if (fixed !== raw) {
+    await writeFile(configPath, fixed, "utf-8");
+    console.log("  fixed vitest.config.ts (relative test paths)");
+  }
 }

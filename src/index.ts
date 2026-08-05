@@ -14,6 +14,12 @@
 export { loadConfig, ExtractConfigSchema } from "./config.js";
 export { extractProject } from "./extract.js";
 export { scanForSecrets } from "./scan.js";
+export { transferGitHistory, commitExport } from "./fs/git.js";
+export {
+  generateCiWorkflow,
+  fixStandalonePackageJson,
+  fixStandaloneVitestConfig,
+} from "./fs/transform.js";
 export type {
   ExtractConfig,
   ExtractContext,

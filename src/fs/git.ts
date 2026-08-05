@@ -10,8 +10,10 @@
 </CHANGE_SUMMARY>
 */
 
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import * as path from "node:path";
+import * as os from "node:os";
 import { execSync } from "node:child_process";
 import type { GitConfig } from "../types.js";
 
@@ -104,6 +106,63 @@ export function getLastExportDate(dest: string): string | null {
     return dateStr || null;
   } catch {
     return null;
+  }
+}
+
+export async function transferGitHistory(
+  root: string,
+  dest: string,
+  pathPrefixes: string[],
+): Promise<boolean> {
+  try {
+    execSync("git rev-parse --git-dir", { cwd: root, stdio: "pipe" });
+  } catch {
+    console.log("  source is not a git repository, skipping history transfer");
+    return false;
+  }
+
+  console.log(`Transferring git history for paths: ${pathPrefixes.join(", ")}...`);
+
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), "repo-extract-history-"));
+
+  try {
+    execSync(`git clone --no-hardlinks "${root}" "${tmpDir}"`, {
+      stdio: "pipe",
+    });
+
+    execSync("git reset --hard", { cwd: tmpDir, stdio: "pipe" });
+
+    const env = { ...process.env, FILTER_BRANCH_SQUELCH_WARNING: "1" };
+
+    if (pathPrefixes.length === 1) {
+      execSync(
+        `git filter-branch -f --prune-empty --subdirectory-filter "${pathPrefixes[0]}" -- --all`,
+        { cwd: tmpDir, stdio: "pipe", env },
+      );
+    } else {
+      const keepPattern = pathPrefixes
+        .map((p) => `^${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/`)
+        .join("|");
+      execSync(
+        `git filter-branch -f --prune-empty --index-filter "git ls-files | grep -vE '${keepPattern}' | xargs -r git rm -r --cached --ignore-unmatch --quiet --" -- --all`,
+        { cwd: tmpDir, stdio: "pipe", env },
+      );
+    }
+
+    const destGit = path.join(dest, ".git");
+    if (existsSync(destGit)) {
+      rmSync(destGit, { recursive: true, force: true });
+    }
+    await cp(path.join(tmpDir, ".git"), destGit, { recursive: true });
+
+    console.log("  git history transferred");
+    return true;
+  } catch (err) {
+    console.log("  git history transfer failed, continuing with fresh repo");
+    console.log(`  ${(err instanceof Error ? err.message : String(err)).slice(0, 200)}`);
+    return false;
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
 }
 

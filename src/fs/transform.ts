@@ -1,0 +1,400 @@
+/*
+<MODULE_CONTRACT>
+<purpose>Package.json and tsconfig transformation utilities for exported repos.</purpose>
+<non-goals>
+  <item>Does not copy files (see copy.ts).</item>
+</non-goals>
+</MODULE_CONTRACT>
+<CHANGE_SUMMARY>
+  <item>Ported transformPackageJson, fixPackageTsconfigs, fixAppTsconfigs, regenerateTsconfigBase, generateRootFiles from scripts/export-clients-helpers.ts for RFC-0070.</item>
+</CHANGE_SUMMARY>
+*/
+
+import { readFile, writeFile, rm, access, readdir } from "node:fs/promises";
+import * as path from "node:path";
+import type { Dirent } from "node:fs";
+import type { ExtractConfig } from "../types.js";
+import { isIgnored } from "./copy.js";
+
+export async function transformPackageJson(dest: string, relPath: string): Promise<void> {
+  const fullPath = path.join(dest, relPath);
+  let raw: string;
+  try {
+    raw = await readFile(fullPath, "utf-8");
+  } catch {
+    return;
+  }
+
+  const pkg = JSON.parse(raw);
+  let changed = false;
+
+  if (pkg.devDependencies) {
+    for (const key of Object.keys(pkg.devDependencies)) {
+      if (key.startsWith("@syrokomskyi/compass-")) {
+        delete pkg.devDependencies[key];
+        changed = true;
+      }
+    }
+    if (Object.keys(pkg.devDependencies).length === 0) {
+      delete pkg.devDependencies;
+    }
+  }
+
+  if (relPath.startsWith("packages/") && pkg.scripts) {
+    for (const key of ["build", "typecheck"]) {
+      const script = pkg.scripts[key];
+      if (typeof script === "string" && script.includes("tsconfig.lib.json")) {
+        pkg.scripts[key] = script.replaceAll("tsconfig.lib.json", "tsconfig.build.json");
+        changed = true;
+      }
+    }
+  }
+
+  if (relPath.includes("dashboard") && pkg.scripts) {
+    if (pkg.scripts.build && pkg.scripts.build.includes("export:data")) {
+      pkg.scripts.build = "astro build";
+      changed = true;
+    }
+    if (pkg.scripts.dev && pkg.scripts.dev.includes("export:data")) {
+      pkg.scripts.dev = "astro dev";
+      changed = true;
+    }
+    for (const key of ["changelog", "changelog:init"]) {
+      if (pkg.scripts[key]) {
+        delete pkg.scripts[key];
+        changed = true;
+      }
+    }
+  }
+
+  for (const depField of ["dependencies", "devDependencies", "peerDependencies"]) {
+    if (pkg[depField]) {
+      for (const key of Object.keys(pkg[depField])) {
+        if (key.startsWith("@wgogol/") || key.startsWith("@warpgogol/")) {
+          if (key !== "@warpgogol/repo-extract") {
+            delete pkg[depField][key];
+            changed = true;
+          }
+        }
+      }
+      if (Object.keys(pkg[depField]).length === 0) {
+        delete pkg[depField];
+      }
+    }
+  }
+
+  if (changed) {
+    await writeFile(fullPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
+    console.log(`  transformed: ${relPath}`);
+  }
+}
+
+export async function fixPackageTsconfigs(dest: string, packageDirs: string[]): Promise<void> {
+  for (const pkgDir of packageDirs) {
+    const pkgDest = path.join(dest, pkgDir);
+    try {
+      await rm(path.join(pkgDest, "tsconfig.lib.json"), { force: true });
+    } catch {
+      /* no-op */
+    }
+    try {
+      await rm(path.join(pkgDest, "tsconfig.tsbuildinfo"), { force: true });
+    } catch {
+      /* no-op */
+    }
+
+    const depth = pkgDir.split("/").length;
+    const baseRef = `${"../".repeat(depth)}tsconfig.base.json`;
+    const tsconfigPath = path.join(pkgDest, "tsconfig.json");
+    try {
+      await writeFile(
+        tsconfigPath,
+        JSON.stringify(
+          {
+            extends: baseRef,
+            compilerOptions: {
+              rootDir: "src",
+              outDir: "dist",
+              tsBuildInfoFile: "dist/tsconfig.tsbuildinfo",
+              emitDeclarationOnly: false,
+              forceConsistentCasingInFileNames: true,
+              types: ["node"],
+            },
+            include: ["src/**/*.ts"],
+          },
+          null,
+          2,
+        ) + "\n",
+      );
+    } catch {
+      /* no-op */
+    }
+
+    const tsconfigBuildPath = path.join(pkgDest, "tsconfig.build.json");
+    try {
+      await writeFile(
+        tsconfigBuildPath,
+        JSON.stringify(
+          {
+            extends: "./tsconfig.json",
+            exclude: ["src/**/*.test.ts", "src/tests/**"],
+          },
+          null,
+          2,
+        ) + "\n",
+      );
+    } catch {
+      /* no-op */
+    }
+  }
+}
+
+export async function fixAppTsconfigs(dest: string, appTsconfigPaths: string[]): Promise<void> {
+  for (const rel of appTsconfigPaths) {
+    const full = path.join(dest, rel);
+    try {
+      const raw = await readFile(full, "utf-8");
+      const cfg = JSON.parse(raw);
+      delete cfg.references;
+      await writeFile(full, JSON.stringify(cfg, null, 2) + "\n");
+    } catch {
+      /* no-op */
+    }
+  }
+}
+
+export async function regenerateTsconfigBase(dest: string): Promise<void> {
+  const baseTsconfig = {
+    compilerOptions: {
+      composite: true,
+      declarationMap: true,
+      emitDeclarationOnly: true,
+      importHelpers: true,
+      isolatedModules: true,
+      lib: ["es2022"],
+      module: "nodenext",
+      moduleResolution: "nodenext",
+      noEmitOnError: true,
+      noFallthroughCasesInSwitch: true,
+      noImplicitOverride: true,
+      noImplicitReturns: true,
+      noUnusedLocals: true,
+      skipLibCheck: true,
+      strict: true,
+      target: "es2022",
+      customConditions: ["@syrokomskyi/source"],
+    },
+  };
+  await writeFile(
+    path.join(dest, "tsconfig.base.json"),
+    JSON.stringify(baseTsconfig, null, 2) + "\n",
+  );
+  console.log("  regenerated tsconfig.base.json");
+}
+
+export async function findAppTsconfigs(dest: string, appDirs: string[]): Promise<string[]> {
+  const results: string[] = [];
+  for (const appDir of appDirs) {
+    const fullDir = path.join(dest, appDir);
+    await walkForTsconfigs(fullDir, appDir, results);
+  }
+  return results;
+}
+
+async function walkForTsconfigs(dir: string, relDir: string, results: string[]): Promise<void> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (isIgnored(entry.name)) continue;
+      await walkForTsconfigs(path.join(dir, entry.name), path.join(relDir, entry.name), results);
+    } else if (entry.name === "tsconfig.json") {
+      results.push(relDir.replace(/\\/g, "/") + "/tsconfig.json");
+    }
+  }
+}
+
+export async function findPackageJsonFiles(dest: string, dirs: string[]): Promise<string[]> {
+  const results: string[] = [];
+  for (const dir of dirs) {
+    const fullDir = path.join(dest, dir);
+    await walkForPackageJson(fullDir, dir, results);
+  }
+  return results;
+}
+
+async function walkForPackageJson(dir: string, relDir: string, results: string[]): Promise<void> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (isIgnored(entry.name)) continue;
+      await walkForPackageJson(path.join(dir, entry.name), path.join(relDir, entry.name), results);
+    } else if (entry.name === "package.json") {
+      results.push(relDir.replace(/\\/g, "/") + "/package.json");
+    }
+  }
+}
+
+export function buildGitignore(extraLines: string[] = []): string {
+  const base = [
+    ".env",
+    ".env.*",
+    "",
+    "# Build outputs",
+    ".output",
+    ".debug",
+    ".debug-public",
+    "dist",
+    "node_modules",
+    "",
+    "# Workspace",
+    ".turbo",
+    "",
+    "# TypeScript",
+    "*.tsbuildinfo",
+    "",
+    "# Data files",
+    "**/*.db",
+    ".cadence-state.json",
+    "archive/",
+    ".pipeline-data/",
+    "",
+    "# Astro",
+    ".astro",
+    "",
+    "# OS files",
+    ".DS_Store",
+    "Thumbs.db",
+  ];
+  const extra = extraLines.length > 0 ? ["", ...extraLines] : [];
+  return [...base, ...extra].join("\n");
+}
+
+export function buildRootPackageJson(destName: string): object {
+  return {
+    name: `@syrokomskyi/clients-${destName}`,
+    private: true,
+    scripts: {
+      build: 'pnpm --recursive --filter "./apps/**" exec pnpm run build',
+      typecheck: 'pnpm --recursive --filter "./apps/**" exec pnpm run typecheck',
+      lint: 'pnpm --recursive --filter "./apps/**" exec pnpm run lint',
+    },
+    devDependencies: {
+      "@eslint/js": "^10.0.1",
+      "@types/node": "^22.10.0",
+      eslint: "~10.7.0",
+      tsx: "^4.22.3",
+      typescript: "~6.0.3",
+      "typescript-eslint": "^8.64.0",
+    },
+    packageManager: "pnpm@10.33.0",
+  };
+}
+
+export async function generateRootFiles(
+  dest: string,
+  root: string,
+  config: ExtractConfig,
+  packageDirs: string[],
+  appDirs: string[],
+): Promise<void> {
+  await writeFile(
+    path.join(dest, "package.json"),
+    JSON.stringify(buildRootPackageJson(config.destName), null, 2) + "\n",
+  );
+
+  const workspaceEntries = new Set<string>();
+  workspaceEntries.add("packages/*");
+  workspaceEntries.add("packages/*/*");
+  for (const appDir of appDirs) {
+    const parts = appDir.split("/");
+    if (parts.length >= 2) {
+      workspaceEntries.add(`${parts.slice(0, -1).join("/")}/*`);
+    }
+    if (parts.length >= 3) {
+      workspaceEntries.add(`${appDir}/*`);
+    }
+    if (parts.length === 2) {
+      workspaceEntries.add("apps/*");
+    }
+  }
+
+  const workspaceYaml = [
+    "packages:",
+    ...Array.from(workspaceEntries)
+      .sort()
+      .map((e) => `  - ${e}`),
+    "",
+    "onlyBuiltDependencies:",
+    "  - '@duckdb/node-api'",
+    "  - '@swc/core'",
+    "  - better-sqlite3",
+    "  - esbuild",
+    "",
+  ].join("\n");
+  await writeFile(path.join(dest, "pnpm-workspace.yaml"), workspaceYaml);
+
+  await writeFile(path.join(dest, ".gitignore"), buildGitignore(config.extraGitignore));
+
+  const appRefs: { path: string }[] = [];
+  for (const appDir of appDirs) {
+    const srcTsconfig = path.join(root, appDir, "tsconfig.json");
+    try {
+      await access(srcTsconfig);
+      appRefs.push({ path: `./${appDir}` });
+    } catch {
+      /* no tsconfig.json at this level — skip */
+    }
+  }
+  const references = [...packageDirs.map((d) => ({ path: `./${d}` })), ...appRefs];
+  const tsconfig = {
+    extends: "./tsconfig.base.json",
+    compileOnSave: false,
+    files: [],
+    references,
+  };
+  await writeFile(path.join(dest, "tsconfig.json"), JSON.stringify(tsconfig, null, 2) + "\n");
+
+  console.log("  generated: package.json, pnpm-workspace.yaml, .gitignore, tsconfig.json");
+}
+
+export async function cleanStrayArtifacts(dest: string): Promise<void> {
+  for (const name of ["node_modules"]) {
+    try {
+      await rm(path.join(dest, name), { recursive: true, force: true });
+    } catch {
+      /* no-op */
+    }
+  }
+
+  async function cleanDeep(dir: string) {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name === "node_modules" || e.name === ".turbo") {
+          await rm(full, { recursive: true, force: true });
+        } else {
+          await cleanDeep(full);
+        }
+      } else if (e.name.endsWith(".tsbuildinfo") || e.name.endsWith(".db")) {
+        await rm(full, { force: true });
+      }
+    }
+  }
+  await cleanDeep(dest);
+}

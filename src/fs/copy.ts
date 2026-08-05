@@ -25,6 +25,7 @@ const IGNORE_DIRS = new Set([
   "dist",
   ".astro",
   ".agents",
+  "spec",
 ]);
 
 const IGNORE_FILES = new Set([

@@ -17,10 +17,19 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   { name: "AWS Access Key ID", pattern: /AKIA[0-9A-Z]{16}/g },
   { name: "AWS STS Access Key ID", pattern: /ASIA[0-9A-Z]{16}/g },
   { name: "AWS Secret Access Key", pattern: /aws_secret_access_key\s*[=:]\s*[A-Za-z0-9/+=]{40}/gi },
-  { name: "Pre-signed S3 URL with credentials", pattern: /AWSAccessKeyId=[A-Z0-9]+&Signature=[^&]+&x-amz-security-token=/gi },
-  { name: "Private key (PEM)", pattern: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/g },
+  {
+    name: "Pre-signed S3 URL with credentials",
+    pattern: /AWSAccessKeyId=[A-Z0-9]+&Signature=[^&]+&x-amz-security-token=/gi,
+  },
+  {
+    name: "Private key (PEM)",
+    pattern: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/g,
+  },
   { name: "GitHub token", pattern: /gh[pousr]_[A-Za-z0-9]{36}/g },
-  { name: "Generic API key assignment", pattern: /(?:api[_-]?key|apikey|secret[_-]?key)\s*[=:]\s*['"][A-Za-z0-9]{32,}['"]/gi },
+  {
+    name: "Generic API key assignment",
+    pattern: /(?:api[_-]?key|apikey|secret[_-]?key)\s*[=:]\s*['"][A-Za-z0-9]{32,}['"]/gi,
+  },
 ];
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1 MB — skip larger files
@@ -65,6 +74,8 @@ async function scanFile(root: string, filePath: string, findings: SecretFinding[
     pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(content)) !== null) {
+      const before = content[match.index - 1];
+      if (before === '"' || before === "'" || before === "`") continue;
       const lineNum = content.slice(0, match.index).split("\n").length;
       const line = lines[lineNum - 1] ?? "";
       const preview = line.length > 120 ? line.slice(0, 120) + "..." : line;

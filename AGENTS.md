@@ -30,7 +30,10 @@ This is a **package** workspace. Expose stable typed APIs. Do not import from ap
 | --- | --- |
 | `build` | `tsc -p tsconfig.build.json` |
 | `typecheck` | `tsc -p tsconfig.json --noEmit` |
-| `test` | `pnpm --dir ../../.. exec vitest run --config packages/repo-extract/vitest.config.ts` |
+| `test` | `vitest run` |
+| `changelog` | `changelog-live` |
+| `changelog:init` | `changelog-live init` |
+| `prepublishOnly` | `pnpm run build` |
 
 ## Dependencies
 

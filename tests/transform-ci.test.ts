@@ -23,11 +23,23 @@ describe("generateCiWorkflow", () => {
     const yaml = generateCiWorkflow();
     expect(yaml).toContain("name: CI");
     expect(yaml).toContain("pnpm install --frozen-lockfile");
+    expect(yaml).toContain("pnpm run lint");
     expect(yaml).toContain("pnpm run typecheck");
     expect(yaml).toContain("pnpm run build");
     expect(yaml).toContain("pnpm test");
     expect(yaml).toContain("actions/checkout@v5");
     expect(yaml).toContain("pnpm/action-setup@v6");
+  });
+
+  it("includes npm publish with provenance", () => {
+    const yaml = generateCiWorkflow();
+    expect(yaml).toContain("npm publish --provenance");
+    expect(yaml).toContain("NODE_AUTH_TOKEN");
+  });
+
+  it("includes id-token: write permission for provenance", () => {
+    const yaml = generateCiWorkflow();
+    expect(yaml).toContain("id-token: write");
   });
 });
 

@@ -411,6 +411,7 @@ export function generateCiWorkflow(): string {
     "",
     "permissions:",
     "  contents: read",
+    "  id-token: write",
     "",
     "jobs:",
     "  ci:",
@@ -424,9 +425,13 @@ export function generateCiWorkflow(): string {
     "          node-version: 22",
     "          cache: pnpm",
     "      - run: pnpm install --frozen-lockfile",
+    "      - run: pnpm run lint",
     "      - run: pnpm run typecheck",
     "      - run: pnpm run build",
     "      - run: pnpm test",
+    "      - run: npm publish --provenance --access public",
+    "        env:",
+    "          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}",
     "",
   ].join("\n");
 }

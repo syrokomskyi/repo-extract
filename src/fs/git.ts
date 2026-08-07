@@ -110,14 +110,10 @@ export async function commitExport(
           execFileSync("git", ["push", "-u", "origin", branch], { cwd: dest, stdio: "inherit" });
           log(`  pushed to origin/${branch}`);
           pushed = true;
-        } catch {
-          log("  regular push rejected, retrying with --force...");
-          execFileSync("git", ["push", "-u", "--force", "origin", branch], {
-            cwd: dest,
-            stdio: "inherit",
-          });
-          log(`  force-pushed to origin/${branch}`);
-          pushed = true;
+        } catch (pushErr) {
+          error(`  push rejected: ${pushErr instanceof Error ? pushErr.message : pushErr}`);
+          error("  remote has diverged — commit is saved locally.");
+          error("  resolve manually: pull remote changes, merge, then push.");
         }
       } catch (pushErr) {
         error(`  push failed: ${pushErr instanceof Error ? pushErr.message : pushErr}`);

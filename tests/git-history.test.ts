@@ -87,10 +87,7 @@ describe("transferGitHistory", () => {
     await writeFile(path.join(tmpDest, "packages/pkg-a/src/index.ts"), "export const a = 1;\n");
     await writeFile(path.join(tmpDest, "packages/pkg-b/src/index.ts"), "export const b = 1;\n");
 
-    const result = await transferGitHistory(tmpRoot, tmpDest, [
-      "packages/pkg-a",
-      "packages/pkg-b",
-    ]);
+    const result = await transferGitHistory(tmpRoot, tmpDest, ["packages/pkg-a", "packages/pkg-b"]);
 
     expect(result).toBe(true);
 
@@ -98,6 +95,42 @@ describe("transferGitHistory", () => {
     expect(log).toContain("init pkg-a");
     expect(log).toContain("init pkg-b");
     expect(log).not.toContain("add unrelated app");
+  });
+
+  it("handles path prefix with spaces", async () => {
+    gitInit(tmpRoot);
+
+    await mkdir(path.join(tmpRoot, "packages/my pkg/src"), { recursive: true });
+    await writeFile(path.join(tmpRoot, "packages/my pkg/src/index.ts"), "export const v = 1;\n");
+    gitCommit(tmpRoot, "init my pkg");
+
+    await mkdir(path.join(tmpDest, "src"), { recursive: true });
+    await writeFile(path.join(tmpDest, "src/index.ts"), "export const v = 1;\n");
+
+    const result = await transferGitHistory(tmpRoot, tmpDest, ["packages/my pkg"]);
+
+    expect(result).toBe(true);
+
+    const log = execSync("git log --oneline", { cwd: tmpDest, encoding: "utf-8" }).trim();
+    expect(log).toContain("init my pkg");
+  });
+
+  it("handles path prefix with single quotes", async () => {
+    gitInit(tmpRoot);
+
+    await mkdir(path.join(tmpRoot, "packages/my'pkg/src"), { recursive: true });
+    await writeFile(path.join(tmpRoot, "packages/my'pkg/src/index.ts"), "export const v = 1;\n");
+    gitCommit(tmpRoot, "init my'pkg");
+
+    await mkdir(path.join(tmpDest, "src"), { recursive: true });
+    await writeFile(path.join(tmpDest, "src/index.ts"), "export const v = 1;\n");
+
+    const result = await transferGitHistory(tmpRoot, tmpDest, ["packages/my'pkg"]);
+
+    expect(result).toBe(true);
+
+    const log = execSync("git log --oneline", { cwd: tmpDest, encoding: "utf-8" }).trim();
+    expect(log).toContain("init my'pkg");
   });
 
   it("returns false when source is not a git repository", async () => {

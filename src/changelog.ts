@@ -10,6 +10,7 @@
 </CHANGE_SUMMARY>
 */
 
+import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import * as path from "node:path";
 
@@ -131,7 +132,6 @@ export async function tryAiCommitMessage(dest: string, projectDir: string): Prom
 
 function getLastExportDate(dest: string): string | null {
   try {
-    const { execSync } = require("node:child_process");
     const dateStr = execSync("git log -1 --format=%ad --date=format:%Y-%m-%d", {
       cwd: dest,
       encoding: "utf-8",

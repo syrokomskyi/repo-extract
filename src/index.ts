@@ -13,6 +13,7 @@
 
 export { loadConfig, ExtractConfigSchema } from "./config.js";
 export { extractProject } from "./extract.js";
+export { detectPackageManager } from "./package-manager.js";
 export { scanForSecrets } from "./scan.js";
 export { transferGitHistory, commitExport } from "./fs/git.js";
 export {
@@ -24,6 +25,8 @@ export type {
   ExtractConfig,
   ExtractContext,
   ExtractOptions,
+  PackageManager,
+  CiConfig,
   PostProcessRule,
   PostProcessAction,
   CopyRule,

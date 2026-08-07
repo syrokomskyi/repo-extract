@@ -8,7 +8,9 @@ import {
   fixStandaloneVitestConfig,
   buildRootPackageJson,
 } from "../src/fs/transform.js";
-import type { ExtractConfig } from "../src/types.js";
+import { detectPackageManager } from "../src/package-manager.js";
+import { getMonorepoConfigFiles } from "../src/fs/copy.js";
+import type { ExtractConfig, PackageManager } from "../src/types.js";
 
 const baseConfig: ExtractConfig = {
   projectDir: "packages/test",
@@ -17,7 +19,7 @@ const baseConfig: ExtractConfig = {
   workspacePrefixes: ["@syrokomskyi/", "@warpgogol/", "@wgogol/"],
   stripScopes: ["@syrokomskyi/", "@warpgogol/", "@wgogol/"],
   preservePackages: ["@warpgogol/repo-extract"],
-  packageManager: "pnpm@10.33.0",
+  packageManager: "pnpm",
 };
 
 async function mkdtemp(): Promise<string> {
@@ -30,8 +32,8 @@ async function mkdtemp(): Promise<string> {
 }
 
 describe("generateCiWorkflow", () => {
-  it("generates a valid CI workflow YAML", () => {
-    const yaml = generateCiWorkflow();
+  it("generates a valid CI workflow YAML for pnpm", () => {
+    const yaml = generateCiWorkflow("pnpm")!;
     expect(yaml).toContain("name: CI");
     expect(yaml).toContain("pnpm install --frozen-lockfile");
     expect(yaml).toContain("pnpm run lint");
@@ -42,23 +44,85 @@ describe("generateCiWorkflow", () => {
     expect(yaml).toContain("pnpm/action-setup@v6");
   });
 
+  it("generates a valid CI workflow YAML for npm", () => {
+    const yaml = generateCiWorkflow("npm")!;
+    expect(yaml).toContain("npm ci");
+    expect(yaml).toContain("npm run lint");
+    expect(yaml).toContain("npm run typecheck");
+    expect(yaml).toContain("npm run build");
+    expect(yaml).toContain("npm test");
+    expect(yaml).not.toContain("pnpm/action-setup");
+    expect(yaml).toContain("cache: npm");
+  });
+
+  it("generates a valid CI workflow YAML for yarn", () => {
+    const yaml = generateCiWorkflow("yarn")!;
+    expect(yaml).toContain("yarn install --frozen-lockfile");
+    expect(yaml).toContain("yarn lint");
+    expect(yaml).toContain("yarn typecheck");
+    expect(yaml).toContain("yarn build");
+    expect(yaml).toContain("yarn test");
+    expect(yaml).toContain("cache: yarn");
+  });
+
   it("includes npm publish with provenance", () => {
-    const yaml = generateCiWorkflow();
+    const yaml = generateCiWorkflow("pnpm")!;
     expect(yaml).toContain("npm publish --provenance");
     expect(yaml).toContain("NODE_AUTH_TOKEN");
   });
 
   it("includes id-token: write permission for provenance", () => {
-    const yaml = generateCiWorkflow();
+    const yaml = generateCiWorkflow("pnpm")!;
     expect(yaml).toContain("id-token: write");
+  });
+
+  it("returns null when provider is none", () => {
+    const yaml = generateCiWorkflow("pnpm", { provider: "none", publish: false, nodeVersion: 22 });
+    expect(yaml).toBeNull();
+  });
+
+  it("omits publish step when publish is false", () => {
+    const yaml = generateCiWorkflow("pnpm", {
+      provider: "github-actions",
+      publish: false,
+      nodeVersion: 22,
+    })!;
+    expect(yaml).not.toContain("npm publish");
+  });
+
+  it("uses custom node version", () => {
+    const yaml = generateCiWorkflow("npm", {
+      provider: "github-actions",
+      publish: true,
+      nodeVersion: 20,
+    })!;
+    expect(yaml).toContain("node-version: 20");
   });
 });
 
 describe("buildRootPackageJson", () => {
-  it("includes a test script", () => {
-    const pkg = buildRootPackageJson("my-app", baseConfig) as { scripts: Record<string, string> };
+  it("includes a test script for pnpm", () => {
+    const pkg = buildRootPackageJson("my-app", baseConfig, "pnpm") as {
+      scripts: Record<string, string>;
+    };
     expect(pkg.scripts.test).toBeDefined();
     expect(pkg.scripts.test).toContain("--if-present test");
+  });
+
+  it("uses npm workspaces scripts for npm", () => {
+    const pkg = buildRootPackageJson("my-app", baseConfig, "npm") as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts.build).toContain("npm run build --workspaces");
+    expect(pkg.scripts.test).toContain("npm test --workspaces");
+  });
+
+  it("uses yarn workspaces foreach for yarn", () => {
+    const pkg = buildRootPackageJson("my-app", baseConfig, "yarn") as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts.build).toContain("yarn workspaces foreach run build");
+    expect(pkg.scripts.test).toContain("yarn workspaces foreach run test");
   });
 });
 
@@ -83,7 +147,7 @@ describe("fixStandalonePackageJson", () => {
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
-    await fixStandalonePackageJson(tmpDir, baseConfig);
+    await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.scripts.test).toBe("vitest run");
@@ -98,7 +162,7 @@ describe("fixStandalonePackageJson", () => {
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
-    await fixStandalonePackageJson(tmpDir, baseConfig);
+    await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.dependencies.zod).toBe("*");
@@ -116,7 +180,7 @@ describe("fixStandalonePackageJson", () => {
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
-    await fixStandalonePackageJson(tmpDir, baseConfig);
+    await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.devDependencies).toHaveProperty("@warpgogol/repo-extract");
@@ -140,7 +204,7 @@ describe("fixStandalonePackageJson", () => {
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
-    await fixStandalonePackageJson(tmpDir, baseConfig);
+    await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.peerDependencies).toHaveProperty("@warpgogol/changelog-live");
@@ -159,7 +223,7 @@ describe("fixStandalonePackageJson", () => {
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
-    await fixStandalonePackageJson(tmpDir, baseConfig);
+    await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.scripts.test).toBe("vitest run");
@@ -227,7 +291,7 @@ describe("regenerateTsconfigBase", () => {
 
 describe("buildRootPackageJson default name", () => {
   it("uses exported-{destName} when rootPackageName not set", () => {
-    const pkg = buildRootPackageJson("my-app", baseConfig) as { name: string };
+    const pkg = buildRootPackageJson("my-app", baseConfig, "pnpm") as { name: string };
     expect(pkg.name).toBe("exported-my-app");
   });
 
@@ -236,7 +300,7 @@ describe("buildRootPackageJson default name", () => {
       ...baseConfig,
       rootPackageName: "@acme/clients-hdri",
     };
-    const pkg = buildRootPackageJson("hdri", namedConfig) as { name: string };
+    const pkg = buildRootPackageJson("hdri", namedConfig, "pnpm") as { name: string };
     expect(pkg.name).toBe("@acme/clients-hdri");
   });
 });
@@ -271,5 +335,56 @@ describe("fixStandaloneVitestConfig", () => {
 
     const result = await readFile(path.join(tmpDir, "vitest.config.ts"), "utf-8");
     expect(result).toContain('"tests/**/*.test.ts"');
+  });
+});
+
+describe("detectPackageManager", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp();
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("detects pnpm from pnpm-lock.yaml", () => {
+    const { writeFileSync } = require("node:fs");
+    writeFileSync(path.join(tmpDir, "pnpm-lock.yaml"), "");
+    expect(detectPackageManager(tmpDir)).toBe("pnpm");
+  });
+
+  it("detects yarn from yarn.lock", () => {
+    const { writeFileSync } = require("node:fs");
+    writeFileSync(path.join(tmpDir, "yarn.lock"), "");
+    expect(detectPackageManager(tmpDir)).toBe("yarn");
+  });
+
+  it("detects npm from package-lock.json", () => {
+    const { writeFileSync } = require("node:fs");
+    writeFileSync(path.join(tmpDir, "package-lock.json"), "{}");
+    expect(detectPackageManager(tmpDir)).toBe("npm");
+  });
+
+  it("defaults to pnpm when no lockfile found", () => {
+    expect(detectPackageManager(tmpDir)).toBe("pnpm");
+  });
+});
+
+describe("getMonorepoConfigFiles", () => {
+  it("includes pnpm-workspace.yaml for pnpm", () => {
+    const files = getMonorepoConfigFiles("pnpm");
+    expect(files).toContain("pnpm-workspace.yaml");
+  });
+
+  it("excludes pnpm-workspace.yaml for npm", () => {
+    const files = getMonorepoConfigFiles("npm");
+    expect(files).not.toContain("pnpm-workspace.yaml");
+  });
+
+  it("excludes pnpm-workspace.yaml for yarn", () => {
+    const files = getMonorepoConfigFiles("yarn");
+    expect(files).not.toContain("pnpm-workspace.yaml");
   });
 });

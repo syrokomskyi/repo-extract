@@ -8,15 +8,16 @@
 <CHANGE_SUMMARY>
   <item>Initial extractProject orchestrator for RFC-0070. Ports main() and exportStandalonePackage() from scripts/export-clients.ts.</item>
   <item>RFC-0071: Replaced hardcoded destBase, AI files, copyDirs defaults with config-driven options. Pass config to transform functions.</item>
+  <item>RFC-0072: Added detectPackageManager, parameterized install command, CI workflow, and all transform functions for pnpm/npm/yarn.</item>
 </CHANGE_SUMMARY>
 */
 
 import { stat } from "node:fs/promises";
 import { execSync } from "node:child_process";
 import * as path from "node:path";
-import type { ExtractConfig, ExtractContext, ExtractOptions } from "./types.js";
+import type { ExtractConfig, ExtractContext, ExtractOptions, PackageManager } from "./types.js";
 import {
-  MONOREPO_CONFIG_FILES,
+  getMonorepoConfigFiles,
   copyBatchSample,
   copyFiltered,
   copyStandalonePackage,
@@ -42,6 +43,7 @@ import { runPostProcess } from "./postprocess/index.js";
 import { commitExport, transferGitHistory } from "./fs/git.js";
 import { tryGenerateChangelog } from "./changelog.js";
 import { scanForSecrets } from "./scan.js";
+import { detectPackageManager } from "./package-manager.js";
 
 const HTML_LIMIT = 5;
 
@@ -79,6 +81,7 @@ export async function extractProject(
 }
 
 async function exportMonorepo(root: string, dest: string, config: ExtractConfig): Promise<void> {
+  const pm: PackageManager = config.packageManager ?? detectPackageManager(root);
   const projectDir = path.join(root, config.projectDir);
 
   // 0. Generate changelog
@@ -95,7 +98,7 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
 
   // 2. Copy monorepo config files
   console.log("Copying monorepo config files...");
-  const monorepoFiles = config.monorepoConfigFiles ?? MONOREPO_CONFIG_FILES;
+  const monorepoFiles = config.monorepoConfigFiles ?? getMonorepoConfigFiles(pm);
   for (const file of monorepoFiles) {
     const src = path.join(root, file);
     const destPath = path.join(dest, file);
@@ -167,7 +170,7 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
     console.log(`  found ${packageDirs.length} packages: ${packageDirs.join(", ")}`);
   }
 
-  await generateRootFiles(dest, root, config, packageDirs, config.appDirs);
+  await generateRootFiles(dest, root, config, packageDirs, config.appDirs, pm);
 
   // 5. Copy apps with filtering
   console.log("Copying apps...");
@@ -243,13 +246,15 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
   }
 
   // 13. Generate lockfile
-  console.log("Generating pnpm-lock.yaml...");
+  console.log(`Generating ${pm} lockfile...`);
+  const installCmd =
+    pm === "pnpm" ? "pnpm install" : pm === "yarn" ? "yarn install" : "npm install";
   try {
-    execSync("pnpm install", { cwd: dest, stdio: "pipe" });
-    console.log("  generated pnpm-lock.yaml");
+    execSync(installCmd, { cwd: dest, stdio: "pipe" });
+    console.log(`  generated ${pm} lockfile`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("  pnpm install FAILED — lockfile not generated");
+    console.error(`  ${pm} install FAILED — lockfile not generated`);
     console.error(`  ${msg.slice(0, 500)}`);
     throw err;
   }
@@ -263,8 +268,13 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
   const { mkdir: ciMkdir, writeFile: ciWrite } = await import("node:fs/promises");
   const ciDir = path.join(dest, ".github", "workflows");
   await ciMkdir(ciDir, { recursive: true });
-  await ciWrite(path.join(ciDir, "ci.yml"), generateCiWorkflow());
-  console.log("  generated .github/workflows/ci.yml");
+  const ciContent = generateCiWorkflow(pm, config.ci);
+  if (ciContent) {
+    await ciWrite(path.join(ciDir, "ci.yml"), ciContent);
+    console.log("  generated .github/workflows/ci.yml");
+  } else {
+    console.log("  skipped CI workflow (provider: none)");
+  }
 
   // 15. Summary
   console.log("");
@@ -304,6 +314,7 @@ async function exportStandalonePackage(
   dest: string,
   config: ExtractConfig,
 ): Promise<void> {
+  const pm: PackageManager = config.packageManager ?? detectPackageManager(root);
   const changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)}`;
 
   // 1. Clean destination
@@ -361,7 +372,7 @@ async function exportStandalonePackage(
 
   // 4b. Fix standalone package.json (test script, workspace deps)
   console.log("Fixing standalone package.json...");
-  await fixStandalonePackageJson(dest, config);
+  await fixStandalonePackageJson(dest, config, pm, root);
 
   // 4c. Fix vitest.config.ts (relative test paths)
   console.log("Fixing vitest.config.ts...");
@@ -376,8 +387,13 @@ async function exportStandalonePackage(
   const { mkdir: ciMkdir, writeFile: ciWrite } = await import("node:fs/promises");
   const ciDir = path.join(dest, ".github", "workflows");
   await ciMkdir(ciDir, { recursive: true });
-  await ciWrite(path.join(ciDir, "ci.yml"), generateCiWorkflow());
-  console.log("  generated .github/workflows/ci.yml");
+  const ciContent = generateCiWorkflow(pm, config.ci);
+  if (ciContent) {
+    await ciWrite(path.join(ciDir, "ci.yml"), ciContent);
+    console.log("  generated .github/workflows/ci.yml");
+  } else {
+    console.log("  skipped CI workflow (provider: none)");
+  }
 
   // 6. Summary
   console.log("");

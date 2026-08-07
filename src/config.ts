@@ -8,6 +8,7 @@
 <CHANGE_SUMMARY>
   <item>Initial config schema and loader for RFC-0070.</item>
   <item>RFC-0071: Added stripScopes, preservePackages, rootPackageName, customConditions, aiEcosystemFiles, monorepoConfigFiles, onlyBuiltDependencies, destBase, packageManager, gitignoreMode. Changed workspacePrefixes default to [] and copyDirs default to [].</item>
+  <item>RFC-0072: Changed packageManager from string to enum. Added CiConfigSchema and ci field.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -51,6 +52,13 @@ const PostProcessRuleSchema = z.discriminatedUnion("action", [
   DeleteRuleSchema,
 ]);
 
+const CiConfigSchema = z.object({
+  provider: z.enum(["github-actions", "none"]).default("github-actions"),
+  packageManager: z.enum(["pnpm", "npm", "yarn"]).optional(),
+  publish: z.boolean().default(true),
+  nodeVersion: z.number().default(22),
+});
+
 const ExtractConfigSchema = z.object({
   projectDir: z.string().min(1),
   destName: z.string().min(1),
@@ -69,7 +77,8 @@ const ExtractConfigSchema = z.object({
   monorepoConfigFiles: z.array(z.string()).optional(),
   onlyBuiltDependencies: z.array(z.string()).default([]),
   destBase: z.string().optional(),
-  packageManager: z.string().optional(),
+  packageManager: z.enum(["pnpm", "npm", "yarn"]).optional(),
+  ci: CiConfigSchema.optional(),
   gitignoreMode: z.enum(["minimal", "extended"]).default("extended"),
   git: GitConfigSchema.optional(),
   copyDirs: z.array(z.string()).default([]),

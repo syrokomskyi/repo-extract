@@ -9,13 +9,15 @@
   <item>Ported transformPackageJson, fixPackageTsconfigs, fixAppTsconfigs, regenerateTsconfigBase, generateRootFiles from scripts/export-clients-helpers.ts for RFC-0070.</item>
   <item>ADR-0010: added lint step, npm publish --provenance, and id-token: write to generateCiWorkflow()</item>
   <item>RFC-0071: Replaced hardcoded org-specific values with config-driven options (stripScopes, preservePackages, rootPackageName, customConditions, onlyBuiltDependencies, packageManager, gitignoreMode).</item>
+  <item>RFC-0072: Parameterized buildRootPackageJson, generateRootFiles, generateCiWorkflow, fixStandalonePackageJson for pnpm/npm/yarn support.</item>
 </CHANGE_SUMMARY>
 */
 
 import { readFile, writeFile, rm, access, readdir } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import type { Dirent } from "node:fs";
-import type { ExtractConfig } from "../types.js";
+import type { ExtractConfig, PackageManager, CiConfig } from "../types.js";
 import { isIgnored } from "./copy.js";
 
 export async function transformPackageJson(
@@ -289,16 +291,50 @@ export function buildGitignore(extraLines: string[] = [], config?: ExtractConfig
   return [...base, ...extra].join("\n");
 }
 
-export function buildRootPackageJson(destName: string, config: ExtractConfig): object {
+function rootScripts(pm: PackageManager): Record<string, string> {
+  if (pm === "npm") {
+    return {
+      build: "npm run build --workspaces --if-present",
+      typecheck: "npm run typecheck --workspaces --if-present",
+      lint: "npm run lint --workspaces --if-present",
+      test: "npm test --workspaces --if-present",
+    };
+  }
+  if (pm === "yarn") {
+    return {
+      build: "yarn workspaces foreach run build",
+      typecheck: "yarn workspaces foreach run typecheck",
+      lint: "yarn workspaces foreach run lint",
+      test: "yarn workspaces foreach run test",
+    };
+  }
   return {
+    build: 'pnpm --recursive --filter "./apps/**" exec pnpm run build',
+    typecheck: 'pnpm --recursive --filter "./apps/**" exec pnpm run typecheck',
+    lint: 'pnpm --recursive --filter "./apps/**" exec pnpm run lint',
+    test: 'pnpm --recursive --filter "./apps/**" exec pnpm run --if-present test',
+  };
+}
+
+function detectSourcePackageManagerVersion(root: string): string | undefined {
+  try {
+    const rootPkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf-8"));
+    return rootPkg.packageManager;
+  } catch {
+    return undefined;
+  }
+}
+
+export function buildRootPackageJson(
+  destName: string,
+  config: ExtractConfig,
+  pm: PackageManager,
+  root?: string,
+): object {
+  const pkg: Record<string, unknown> = {
     name: config.rootPackageName ?? `exported-${destName}`,
     private: true,
-    scripts: {
-      build: 'pnpm --recursive --filter "./apps/**" exec pnpm run build',
-      typecheck: 'pnpm --recursive --filter "./apps/**" exec pnpm run typecheck',
-      lint: 'pnpm --recursive --filter "./apps/**" exec pnpm run lint',
-      test: 'pnpm --recursive --filter "./apps/**" exec pnpm run --if-present test',
-    },
+    scripts: rootScripts(pm),
     devDependencies: {
       "@eslint/js": "^10.0.1",
       "@types/node": "^22.10.0",
@@ -307,8 +343,16 @@ export function buildRootPackageJson(destName: string, config: ExtractConfig): o
       typescript: "~6.0.3",
       "typescript-eslint": "^8.64.0",
     },
-    ...(config.packageManager ? { packageManager: config.packageManager } : {}),
   };
+
+  if (pm === "pnpm") {
+    const version = root ? detectSourcePackageManagerVersion(root) : undefined;
+    if (version) {
+      pkg.packageManager = version;
+    }
+  }
+
+  return pkg;
 }
 
 export async function generateRootFiles(
@@ -317,45 +361,65 @@ export async function generateRootFiles(
   config: ExtractConfig,
   packageDirs: string[],
   appDirs: string[],
+  pm: PackageManager,
 ): Promise<void> {
-  await writeFile(
-    path.join(dest, "package.json"),
-    JSON.stringify(buildRootPackageJson(config.destName, config), null, 2) + "\n",
-  );
+  const rootPkg = buildRootPackageJson(config.destName, config, pm, root);
 
-  const workspaceEntries = new Set<string>();
-  workspaceEntries.add("packages/*");
-  workspaceEntries.add("packages/*/*");
-  for (const appDir of appDirs) {
-    const parts = appDir.split("/");
-    if (parts.length >= 2) {
-      workspaceEntries.add(`${parts.slice(0, -1).join("/")}/*`);
+  if (pm === "pnpm") {
+    // pnpm: write pnpm-workspace.yaml, add onlyBuiltDependencies if configured
+    await writeFile(path.join(dest, "package.json"), JSON.stringify(rootPkg, null, 2) + "\n");
+
+    const workspaceEntries = new Set<string>();
+    workspaceEntries.add("packages/*");
+    workspaceEntries.add("packages/*/*");
+    for (const appDir of appDirs) {
+      const parts = appDir.split("/");
+      if (parts.length >= 2) {
+        workspaceEntries.add(`${parts.slice(0, -1).join("/")}/*`);
+      }
+      if (parts.length >= 3) {
+        workspaceEntries.add(`${appDir}/*`);
+      }
+      if (parts.length === 2) {
+        workspaceEntries.add("apps/*");
+      }
     }
-    if (parts.length >= 3) {
-      workspaceEntries.add(`${appDir}/*`);
+
+    const workspaceYamlLines = [
+      "packages:",
+      ...Array.from(workspaceEntries)
+        .sort()
+        .map((e) => `  - ${e}`),
+      "",
+    ];
+
+    if (config.onlyBuiltDependencies && config.onlyBuiltDependencies.length > 0) {
+      workspaceYamlLines.push("onlyBuiltDependencies:");
+      for (const dep of config.onlyBuiltDependencies) {
+        workspaceYamlLines.push(`  - '${dep}'`);
+      }
+      workspaceYamlLines.push("");
     }
-    if (parts.length === 2) {
-      workspaceEntries.add("apps/*");
+
+    await writeFile(path.join(dest, "pnpm-workspace.yaml"), workspaceYamlLines.join("\n"));
+  } else {
+    // npm/yarn: add workspaces field to root package.json, no separate workspace file
+    const workspaceEntries = ["packages/*", "packages/*/*"];
+    for (const appDir of appDirs) {
+      const parts = appDir.split("/");
+      if (parts.length >= 2) {
+        workspaceEntries.push(`${parts.slice(0, -1).join("/")}/*`);
+      }
+      if (parts.length >= 3) {
+        workspaceEntries.push(`${appDir}/*`);
+      }
+      if (parts.length === 2) {
+        workspaceEntries.push("apps/*");
+      }
     }
+    (rootPkg as Record<string, unknown>).workspaces = Array.from(new Set(workspaceEntries)).sort();
+    await writeFile(path.join(dest, "package.json"), JSON.stringify(rootPkg, null, 2) + "\n");
   }
-
-  const workspaceYamlLines = [
-    "packages:",
-    ...Array.from(workspaceEntries)
-      .sort()
-      .map((e) => `  - ${e}`),
-    "",
-  ];
-
-  if (config.onlyBuiltDependencies && config.onlyBuiltDependencies.length > 0) {
-    workspaceYamlLines.push("onlyBuiltDependencies:");
-    for (const dep of config.onlyBuiltDependencies) {
-      workspaceYamlLines.push(`  - '${dep}'`);
-    }
-    workspaceYamlLines.push("");
-  }
-
-  await writeFile(path.join(dest, "pnpm-workspace.yaml"), workspaceYamlLines.join("\n"));
 
   await writeFile(path.join(dest, ".gitignore"), buildGitignore(config.extraGitignore, config));
 
@@ -378,7 +442,8 @@ export async function generateRootFiles(
   };
   await writeFile(path.join(dest, "tsconfig.json"), JSON.stringify(tsconfig, null, 2) + "\n");
 
-  console.log("  generated: package.json, pnpm-workspace.yaml, .gitignore, tsconfig.json");
+  const workspaceFile = pm === "pnpm" ? "pnpm-workspace.yaml" : "(workspaces in package.json)";
+  console.log(`  generated: package.json, ${workspaceFile}, .gitignore, tsconfig.json`);
 }
 
 export async function cleanStrayArtifacts(dest: string): Promise<void> {
@@ -413,7 +478,47 @@ export async function cleanStrayArtifacts(dest: string): Promise<void> {
   await cleanDeep(dest);
 }
 
-export function generateCiWorkflow(): string {
+export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | null {
+  if (ci?.provider === "none") return null;
+
+  const nodeVersion = ci?.nodeVersion ?? 22;
+  const publish = ci?.publish ?? true;
+
+  const setupSteps: string[] = [];
+  const installCmd =
+    pm === "pnpm"
+      ? "pnpm install --frozen-lockfile"
+      : pm === "yarn"
+        ? "yarn install --frozen-lockfile"
+        : "npm ci";
+  const runPrefix = pm === "pnpm" ? "pnpm run" : pm === "yarn" ? "yarn" : "npm run";
+  const testCmd = pm === "pnpm" ? "pnpm test" : pm === "yarn" ? "yarn test" : "npm test";
+  const cacheKey = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
+
+  setupSteps.push("      - uses: actions/checkout@v5");
+  if (pm === "pnpm") {
+    setupSteps.push("      - uses: pnpm/action-setup@v6");
+  }
+  setupSteps.push("      - uses: actions/setup-node@v5");
+  setupSteps.push("        with:");
+  setupSteps.push(`          node-version: ${nodeVersion}`);
+  setupSteps.push(`          cache: ${cacheKey}`);
+  setupSteps.push(`      - run: ${installCmd}`);
+
+  const buildSteps = [
+    `      - run: ${runPrefix} lint`,
+    `      - run: ${runPrefix} typecheck`,
+    `      - run: ${runPrefix} build`,
+    `      - run: ${testCmd}`,
+  ];
+
+  const publishSteps: string[] = [];
+  if (publish) {
+    publishSteps.push("      - run: npm publish --provenance --access public");
+    publishSteps.push("        env:");
+    publishSteps.push("          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}");
+  }
+
   return [
     "name: CI",
     "",
@@ -431,25 +536,19 @@ export function generateCiWorkflow(): string {
     "    runs-on: ubuntu-latest",
     "    timeout-minutes: 15",
     "    steps:",
-    "      - uses: actions/checkout@v5",
-    "      - uses: pnpm/action-setup@v6",
-    "      - uses: actions/setup-node@v5",
-    "        with:",
-    "          node-version: 22",
-    "          cache: pnpm",
-    "      - run: pnpm install --frozen-lockfile",
-    "      - run: pnpm run lint",
-    "      - run: pnpm run typecheck",
-    "      - run: pnpm run build",
-    "      - run: pnpm test",
-    "      - run: npm publish --provenance --access public",
-    "        env:",
-    "          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}",
+    ...setupSteps,
+    ...buildSteps,
+    ...publishSteps,
     "",
   ].join("\n");
 }
 
-export async function fixStandalonePackageJson(dest: string, config: ExtractConfig): Promise<void> {
+export async function fixStandalonePackageJson(
+  dest: string,
+  config: ExtractConfig,
+  pm: PackageManager,
+  root?: string,
+): Promise<void> {
   const pkgPath = path.join(dest, "package.json");
   let raw: string;
   try {
@@ -500,9 +599,12 @@ export async function fixStandalonePackageJson(dest: string, config: ExtractConf
     }
   }
 
-  if (!pkg.packageManager && config.packageManager) {
-    pkg.packageManager = config.packageManager;
-    changed = true;
+  if (pm === "pnpm" && !pkg.packageManager) {
+    const version = root ? detectSourcePackageManagerVersion(root) : undefined;
+    if (version) {
+      pkg.packageManager = version;
+      changed = true;
+    }
   }
 
   if (changed) {

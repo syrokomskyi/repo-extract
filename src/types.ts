@@ -9,8 +9,18 @@
 <CHANGE_SUMMARY>
   <item>Initial types for RFC-0070: ExtractConfig, ExtractContext, PostProcessRule.</item>
   <item>RFC-0071: Added stripScopes, preservePackages, rootPackageName, customConditions, aiEcosystemFiles, monorepoConfigFiles, onlyBuiltDependencies, destBase, packageManager, gitignoreMode fields.</item>
+  <item>RFC-0072: Changed packageManager from string to PackageManager enum. Added CiConfig interface and ci field.</item>
 </CHANGE_SUMMARY>
 */
+
+export type PackageManager = "pnpm" | "npm" | "yarn";
+
+export interface CiConfig {
+  provider: "github-actions" | "none";
+  packageManager?: PackageManager;
+  publish: boolean;
+  nodeVersion: number;
+}
 
 export type PostProcessAction = "copy" | "patch" | "delete";
 
@@ -58,7 +68,8 @@ export interface ExtractConfig {
   monorepoConfigFiles?: string[];
   onlyBuiltDependencies?: string[];
   destBase?: string;
-  packageManager?: string;
+  packageManager?: PackageManager;
+  ci?: CiConfig;
   gitignoreMode?: "minimal" | "extended";
   git?: GitConfig;
   copyDirs?: string[];

@@ -8,7 +8,8 @@
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>Ported copyFiltered, copyStandalonePackage, removeDest from scripts/export-clients-helpers.ts for RFC-0070.</item>
-  <item>RFC-0071: Split IGNORE_DIRS into BASE_IGNORE_DIRS (org-neutral) and config-driven ignoreDirs. MONOREPO_CONFIG_FILES kept as auto-detect candidate list.
+  <item>RFC-0071: Split IGNORE_DIRS into BASE_IGNORE_DIRS (org-neutral) and config-driven ignoreDirs. MONOREPO_CONFIG_FILES kept as auto-detect candidate list.</item>
+  <item>RFC-0072: Extended IGNORE_FILES with package-lock.json and yarn.lock. Added getMonorepoConfigFiles(pm) to filter pnpm-workspace.yaml for npm/yarn.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -16,6 +17,7 @@ import { cp, mkdir, readdir, rm } from "node:fs/promises";
 import * as fsSync from "node:fs";
 import * as path from "node:path";
 import type { Dirent } from "node:fs";
+import type { PackageManager } from "../types.js";
 
 const BASE_IGNORE_DIRS = new Set([
   "node_modules",
@@ -32,6 +34,8 @@ const IGNORE_FILES = new Set([
   ".env.production",
   ".env.production.local",
   "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
 ]);
 
 const MONOREPO_CONFIG_FILES = [
@@ -46,6 +50,13 @@ const MONOREPO_CONFIG_FILES = [
   ".nvmrc",
   ".dockerignore",
 ];
+
+export function getMonorepoConfigFiles(pm: PackageManager): string[] {
+  if (pm !== "pnpm") {
+    return MONOREPO_CONFIG_FILES.filter((f) => f !== "pnpm-workspace.yaml");
+  }
+  return [...MONOREPO_CONFIG_FILES];
+}
 
 export function isIgnored(name: string, extraIgnoreDirs?: string[]): boolean {
   if (BASE_IGNORE_DIRS.has(name) || IGNORE_FILES.has(name) || name.endsWith(".tsbuildinfo")) {

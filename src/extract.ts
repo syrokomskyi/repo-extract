@@ -145,7 +145,11 @@ async function exportMonorepo(
   let changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)}`;
   const changelogResult = await tryGenerateChangelog(projectDir, logger);
   let changelogGenerated = false;
-  if (!changelogResult.skipped && changelogResult.commitMessage) {
+  if (
+    !changelogResult.skipped &&
+    changelogResult.commitMessage &&
+    changelogResult.commitMessage !== "no changes"
+  ) {
     changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)} — ${changelogResult.commitMessage}`;
     changelogGenerated = true;
   }

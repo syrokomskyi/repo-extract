@@ -17,6 +17,8 @@
 
 export type PackageManager = "pnpm" | "npm" | "yarn";
 
+export type VersionBump = "patch" | "minor" | "major";
+
 export interface CiConfig {
   provider: "github-actions" | "none";
   packageManager?: PackageManager;
@@ -80,6 +82,7 @@ export interface ExtractConfig {
   excludePathSegments?: string[];
   excludeExtensions?: string[];
   skipSecretScan?: boolean;
+  versionBump?: VersionBump;
 }
 
 export interface ExtractContext {

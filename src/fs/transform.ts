@@ -622,6 +622,26 @@ export async function fixStandalonePackageJson(
     }
   }
 
+  if (config.versionBump && pkg.version) {
+    const parts = String(pkg.version).split(".");
+    if (parts.length === 3) {
+      let [major, minor, patch] = parts.map(Number);
+      if (config.versionBump === "major") {
+        major++;
+        minor = 0;
+        patch = 0;
+      } else if (config.versionBump === "minor") {
+        minor++;
+        patch = 0;
+      } else {
+        patch++;
+      }
+      pkg.version = `${major}.${minor}.${patch}`;
+      changed = true;
+      (logger?.log ?? console.log)(`  bumped version to ${pkg.version} (${config.versionBump})`);
+    }
+  }
+
   if (changed) {
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
     (logger?.log ?? console.log)(

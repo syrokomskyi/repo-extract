@@ -89,6 +89,7 @@ const ExtractConfigSchema = z.object({
   excludePathSegments: z.array(z.string()).optional(),
   excludeExtensions: z.array(z.string()).optional(),
   skipSecretScan: z.boolean().optional(),
+  versionBump: z.enum(["patch", "minor", "major"]).optional(),
 });
 
 export async function loadConfig(configPath: string): Promise<ExtractConfig> {

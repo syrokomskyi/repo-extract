@@ -239,6 +239,46 @@ describe("fixStandalonePackageJson", () => {
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.scripts.test).toBe("vitest run");
   });
+
+  it("bumps patch version when versionBump is patch", async () => {
+    const pkg = { name: "@warpgogol/test", version: "1.2.0" };
+    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+
+    await fixStandalonePackageJson(tmpDir, { ...baseConfig, versionBump: "patch" }, "pnpm");
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    expect(result.version).toBe("1.2.1");
+  });
+
+  it("bumps minor version when versionBump is minor", async () => {
+    const pkg = { name: "@warpgogol/test", version: "1.2.3" };
+    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+
+    await fixStandalonePackageJson(tmpDir, { ...baseConfig, versionBump: "minor" }, "pnpm");
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    expect(result.version).toBe("1.3.0");
+  });
+
+  it("bumps major version when versionBump is major", async () => {
+    const pkg = { name: "@warpgogol/test", version: "1.2.3" };
+    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+
+    await fixStandalonePackageJson(tmpDir, { ...baseConfig, versionBump: "major" }, "pnpm");
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    expect(result.version).toBe("2.0.0");
+  });
+
+  it("does not bump version when versionBump is not set", async () => {
+    const pkg = { name: "@warpgogol/test", version: "1.2.0" };
+    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+
+    await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    expect(result.version).toBe("1.2.0");
+  });
 });
 
 describe("buildGitignore", () => {

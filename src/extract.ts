@@ -95,7 +95,8 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
 
   // 2. Copy monorepo config files
   console.log("Copying monorepo config files...");
-  for (const file of MONOREPO_CONFIG_FILES) {
+  const monorepoFiles = config.monorepoConfigFiles ?? MONOREPO_CONFIG_FILES;
+  for (const file of monorepoFiles) {
     const src = path.join(root, file);
     const destPath = path.join(dest, file);
     try {

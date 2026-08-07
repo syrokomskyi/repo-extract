@@ -23,6 +23,18 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: "^_",
         },
       ],
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "node:child_process",
+              importNames: ["execSync"],
+              message: "Use execFileSync with argument arrays instead. See RFC-0073.",
+            },
+          ],
+        },
+      ],
     },
   },
 );

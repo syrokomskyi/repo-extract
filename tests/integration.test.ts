@@ -86,11 +86,18 @@ describe("extractProject integration", () => {
 
     const origCwd = process.cwd();
     process.chdir(tmpRoot);
+    let result;
     try {
-      await extractProject(config, { dest: tmpDest });
+      result = await extractProject(config, { dest: tmpDest });
     } finally {
       process.chdir(origCwd);
     }
+
+    expect(result).toBeDefined();
+    expect(result!.dest).toBe(tmpDest);
+    expect(result!.mode).toBe("standalone");
+    expect(result!.filesCopied).toBeGreaterThan(0);
+    expect(result!.secretsScanned).toBe(true);
 
     const pkgJson = JSON.parse(await readFile(path.join(tmpDest, "package.json"), "utf-8"));
     expect(pkgJson.name).toBe("@syrokomskyi/my-pkg");

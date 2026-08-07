@@ -2,55 +2,48 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - run: pnpm run build
-
+      - run: pnpm install --frozen-lockfile --config.dangerouslyAllowAllBuilds=true
       - run: pnpm run lint
-
       - run: pnpm run typecheck
-
+      - run: pnpm run build
       - run: pnpm test
 
   publish:
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: ci
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
           registry-url: https://registry.npmjs.org
-
-      - run: pnpm install --frozen-lockfile
-
+      - run: pnpm install --frozen-lockfile --config.dangerouslyAllowAllBuilds=true
       - run: pnpm run build
-
-      - run: npm publish --access public --provenance
+      - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

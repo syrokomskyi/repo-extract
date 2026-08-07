@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - '@warpgogol/changelog-live@0.1.0'

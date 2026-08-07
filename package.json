@@ -1,6 +1,6 @@
 {
   "name": "@warpgogol/repo-extract",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Extract apps and packages from a TurboRepo monorepo into standalone public repositories",
   "license": "Apache-2.0",
   "author": "Andrii Syrokomskyi <andrii@syrokomskyi.com> (https://syrokomskyi.com)",
@@ -63,7 +63,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@warpgogol/changelog-live": "workspace:*"
+    "@warpgogol/changelog-live": "*"
   },
   "peerDependenciesMeta": {
     "@warpgogol/changelog-live": {
@@ -73,11 +73,11 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.2",
-    "@warpgogol/changelog-live": "workspace:*",
     "eslint": "~10.8.0",
     "tsx": "^4.23.5",
     "typescript": "6.0.3",
     "typescript-eslint": "^8.66.0",
     "vitest": "4.1.10"
-  }
+  },
+  "packageManager": "pnpm@11.20.0"
 }

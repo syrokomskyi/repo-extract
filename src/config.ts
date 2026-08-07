@@ -10,6 +10,7 @@
   <item>RFC-0071: Added stripScopes, preservePackages, rootPackageName, customConditions, aiEcosystemFiles, monorepoConfigFiles, onlyBuiltDependencies, destBase, packageManager, gitignoreMode. Changed workspacePrefixes default to [] and copyDirs default to [].</item>
   <item>RFC-0072: Changed packageManager from string to enum. Added CiConfigSchema and ci field.</item>
   <item>RFC-0075: Added excludePathSegments and excludeExtensions fields.</item>
+  <item>ADR-0016: Config schema is the single source of truth — all org-specific values are config fields with org-neutral defaults, no behavioral assumptions baked into source code.</item>
 </CHANGE_SUMMARY>
 */
 

@@ -14,7 +14,23 @@
 
 import { existsSync } from "node:fs";
 import * as path from "node:path";
+import { execSync } from "node:child_process";
 import type { Logger } from "./log.js";
+
+function loadEnvForChangelog(projectDir: string): void {
+  try {
+    const repoRoot = execSync("git rev-parse --show-toplevel", {
+      cwd: projectDir,
+      encoding: "utf-8",
+    }).trim();
+    const envPath = path.join(repoRoot, ".env");
+    if (existsSync(envPath)) {
+      process.loadEnvFile(envPath);
+    }
+  } catch {
+    // Not in a git repo or no .env — rely on existing process.env
+  }
+}
 
 export interface ChangelogResult {
   skipped: boolean;
@@ -32,6 +48,8 @@ export async function tryGenerateChangelog(
   if (!existsSync(changelogConfigPath)) {
     return { skipped: true, sectionsGenerated: 0, filesWritten: [] };
   }
+
+  loadEnvForChangelog(projectDir);
 
   try {
     const mod = await import("@warpgogol/changelog-live");

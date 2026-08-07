@@ -10,6 +10,7 @@
   <item>Initial types for RFC-0070: ExtractConfig, ExtractContext, PostProcessRule.</item>
   <item>RFC-0071: Added stripScopes, preservePackages, rootPackageName, customConditions, aiEcosystemFiles, monorepoConfigFiles, onlyBuiltDependencies, destBase, packageManager, gitignoreMode fields.</item>
   <item>RFC-0072: Changed packageManager from string to PackageManager enum. Added CiConfig interface and ci field.</item>
+  <item>RFC-0074: Added ExtractResult, ExtractProgressEvent, ProgressCallback types. Added onProgress to ExtractOptions.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -89,6 +90,7 @@ export interface ExtractOptions {
   dest?: string;
   dryRun?: boolean;
   verbose?: boolean;
+  onProgress?: ProgressCallback;
 }
 
 export interface SecretFinding {
@@ -97,3 +99,29 @@ export interface SecretFinding {
   name: string;
   preview: string;
 }
+
+export interface ExtractResult {
+  dest: string;
+  mode: "monorepo" | "standalone";
+  filesCopied: number;
+  packagesCopied: number;
+  gitCommitted: boolean;
+  gitPushed: boolean;
+  changelogGenerated: boolean;
+  secretsScanned: boolean;
+}
+
+export type ExtractProgressEvent =
+  | { phase: "start"; config: ExtractConfig; dest: string }
+  | { phase: "cleaning"; dest: string }
+  | { phase: "copying"; dir: string; fileCount?: number }
+  | { phase: "transforming"; file: string }
+  | { phase: "postProcess"; rule: PostProcessRule }
+  | { phase: "scanning"; dest: string }
+  | { phase: "gitHistory"; prefixes: string[] }
+  | { phase: "gitCommit"; message: string }
+  | { phase: "gitPush"; remote: string }
+  | { phase: "complete"; result: ExtractResult }
+  | { phase: "error"; error: Error };
+
+export type ProgressCallback = (event: ExtractProgressEvent) => void;

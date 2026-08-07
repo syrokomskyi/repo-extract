@@ -10,13 +10,24 @@
   <item>RFC-0071: Replaced hardcoded destBase, AI files, copyDirs defaults with config-driven options. Pass config to transform functions.</item>
   <item>RFC-0072: Added detectPackageManager, parameterized install command, CI workflow, and all transform functions for pnpm/npm/yarn.</item>
   <item>RFC-0073: replaced execSync with execFileSync (argument arrays) to eliminate shell injection.</item>
+  <item>RFC-0074: Replaced process.exit(1) with SecretScanError. Changed return type to Promise<ExtractResult>. Added progress events, logger, PackageManagerError wrapping.</item>
 </CHANGE_SUMMARY>
 */
 
 import { stat } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
-import type { ExtractConfig, ExtractContext, ExtractOptions, PackageManager } from "./types.js";
+import type {
+  ExtractConfig,
+  ExtractContext,
+  ExtractOptions,
+  ExtractResult,
+  ExtractProgressEvent,
+  PackageManager,
+} from "./types.js";
+import { SecretScanError, PackageManagerError } from "./errors.js";
+import { createLogger } from "./log.js";
+import type { Logger } from "./log.js";
 import {
   getMonorepoConfigFiles,
   copyBatchSample,
@@ -51,54 +62,91 @@ const HTML_LIMIT = 5;
 export async function extractProject(
   config: ExtractConfig,
   options: ExtractOptions = {},
-): Promise<void> {
+): Promise<ExtractResult> {
   const root = process.cwd();
   const destBase =
     config.destBase ?? (config.projectDir.startsWith("packages/") ? "packages" : "exports");
   const dest = options.dest ?? path.resolve(root, "..", destBase, config.destName);
+  const logger = createLogger(options.verbose);
+  const onProgress = options.onProgress;
 
-  console.log(`Exporting ${config.destName} to ${destBase}...`);
-  console.log(`  source: ${root}`);
-  console.log(`  dest:   ${dest}`);
-  console.log("");
+  const emit = (event: ExtractProgressEvent) => {
+    try {
+      onProgress?.(event);
+    } catch {
+      // callback errors are non-fatal
+    }
+  };
+
+  logger.log(`Exporting ${config.destName} to ${destBase}...`);
+  logger.log(`  source: ${root}`);
+  logger.log(`  dest:   ${dest}`);
+  logger.log("");
 
   if (options.dryRun) {
-    console.log("=== Dry run — no files will be written ===");
-    console.log(`  projectDir: ${config.projectDir}`);
-    console.log(`  destName: ${config.destName}`);
-    console.log(`  standalone: ${config.standalone}`);
-    console.log(`  appDirs: ${config.appDirs.join(", ") || "(none)"}`);
+    logger.log("=== Dry run — no files will be written ===");
+    logger.log(`  projectDir: ${config.projectDir}`);
+    logger.log(`  destName: ${config.destName}`);
+    logger.log(`  standalone: ${config.standalone}`);
+    logger.log(`  appDirs: ${config.appDirs.join(", ") || "(none)"}`);
     if (config.postProcess) {
-      console.log(`  postProcess rules: ${config.postProcess.length}`);
+      logger.log(`  postProcess rules: ${config.postProcess.length}`);
     }
-    return;
+    const result: ExtractResult = {
+      dest,
+      mode: config.standalone ? "standalone" : "monorepo",
+      filesCopied: 0,
+      packagesCopied: 0,
+      gitCommitted: false,
+      gitPushed: false,
+      changelogGenerated: false,
+      secretsScanned: false,
+    };
+    emit({ phase: "complete", result });
+    return result;
   }
 
-  if (config.standalone || config.projectDir.startsWith("packages/")) {
-    await exportStandalonePackage(root, dest, config);
-  } else {
-    await exportMonorepo(root, dest, config);
+  emit({ phase: "start", config, dest });
+
+  try {
+    if (config.standalone || config.projectDir.startsWith("packages/")) {
+      return await exportStandalonePackage(root, dest, config, logger, emit);
+    } else {
+      return await exportMonorepo(root, dest, config, logger, emit);
+    }
+  } catch (err) {
+    emit({ phase: "error", error: err instanceof Error ? err : new Error(String(err)) });
+    throw err;
   }
 }
 
-async function exportMonorepo(root: string, dest: string, config: ExtractConfig): Promise<void> {
+async function exportMonorepo(
+  root: string,
+  dest: string,
+  config: ExtractConfig,
+  logger: Logger,
+  emit: (event: ExtractProgressEvent) => void,
+): Promise<ExtractResult> {
   const pm: PackageManager = config.packageManager ?? detectPackageManager(root);
   const projectDir = path.join(root, config.projectDir);
 
   // 0. Generate changelog
   let changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)}`;
   const changelogResult = await tryGenerateChangelog(projectDir);
+  let changelogGenerated = false;
   if (!changelogResult.skipped && changelogResult.commitMessage) {
     changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)} — ${changelogResult.commitMessage}`;
+    changelogGenerated = true;
   }
 
   // 1. Clean destination
-  console.log("Cleaning destination...");
+  emit({ phase: "cleaning", dest });
+  logger.log("Cleaning destination...");
   await removeDest(dest);
   await ensureDir(dest);
 
   // 2. Copy monorepo config files
-  console.log("Copying monorepo config files...");
+  logger.log("Copying monorepo config files...");
   const monorepoFiles = config.monorepoConfigFiles ?? getMonorepoConfigFiles(pm);
   for (const file of monorepoFiles) {
     const src = path.join(root, file);
@@ -106,30 +154,30 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
     try {
       const { cp } = await import("node:fs/promises");
       await cp(src, destPath);
-      console.log(`  copied: ${file}`);
+      logger.log(`  copied: ${file}`);
     } catch {
-      console.log(`  skipped (not found): ${file}`);
+      logger.log(`  skipped (not found): ${file}`);
     }
   }
 
   // 2b. Copy project-specific root files
   if (config.projectRootFiles && config.projectRootFiles.length > 0) {
-    console.log(`Copying project root files from ${config.projectDir}/...`);
+    logger.log(`Copying project root files from ${config.projectDir}/...`);
     for (const file of config.projectRootFiles) {
       const src = path.join(root, config.projectDir, file);
       const destPath = path.join(dest, file);
       try {
         const { cp } = await import("node:fs/promises");
         await cp(src, destPath);
-        console.log(`  copied: ${file}`);
+        logger.log(`  copied: ${file}`);
       } catch {
-        console.log(`  skipped (not found): ${file}`);
+        logger.log(`  skipped (not found): ${file}`);
       }
     }
   }
 
   // 3. Copy AI ecosystem files
-  console.log("Copying AI agent ecosystem...");
+  logger.log("Copying AI agent ecosystem...");
   const aiFiles = config.aiEcosystemFiles ?? [];
   for (const f of aiFiles) {
     const src = path.join(root, f);
@@ -137,9 +185,9 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
     try {
       const { cp } = await import("node:fs/promises");
       await cp(src, destPath);
-      console.log(`  copied: ${f}`);
+      logger.log(`  copied: ${f}`);
     } catch {
-      console.log(`  skipped (not found): ${f}`);
+      logger.log(`  skipped (not found): ${f}`);
     }
   }
 
@@ -155,68 +203,70 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
           return !isIgnored(name) && !name.endsWith(".tsbuildinfo");
         },
       });
-      console.log(`  copied: ${copyDir}/`);
+      logger.log(`  copied: ${copyDir}/`);
     } catch {
-      console.log(`  skipped: ${copyDir}/ (not found)`);
+      logger.log(`  skipped: ${copyDir}/ (not found)`);
     }
   }
 
   // 4. Generate root files
-  console.log("Generating export root files...");
+  logger.log("Generating export root files...");
 
   let packageDirs = config.packageDirs;
   if (!packageDirs) {
-    console.log("Auto-discovering package dependencies...");
+    logger.log("Auto-discovering package dependencies...");
     packageDirs = await discoverPackageDeps(root, config.appDirs, config.workspacePrefixes);
-    console.log(`  found ${packageDirs.length} packages: ${packageDirs.join(", ")}`);
+    logger.log(`  found ${packageDirs.length} packages: ${packageDirs.join(", ")}`);
   }
 
   await generateRootFiles(dest, root, config, packageDirs, config.appDirs, pm);
 
   // 5. Copy apps with filtering
-  console.log("Copying apps...");
+  logger.log("Copying apps...");
   let appFiles = 0;
   for (const appDir of config.appDirs) {
     const src = path.join(root, appDir);
     const s = await stat(src).catch(() => null);
     if (!s?.isDirectory()) {
-      console.log(`  skipped (not found): ${appDir}`);
+      logger.log(`  skipped (not found): ${appDir}`);
       continue;
     }
+    emit({ phase: "copying", dir: appDir });
     const n = await copyFiltered(root, dest, appDir, config.ignoreDirs);
     appFiles += n;
-    console.log(`  copied ${n} files: ${appDir}`);
+    logger.log(`  copied ${n} files: ${appDir}`);
   }
 
   // 6. Copy packages with filtering
-  console.log("Copying packages...");
+  logger.log("Copying packages...");
   let pkgFiles = 0;
   for (const pkgDir of packageDirs) {
     const src = path.join(root, pkgDir);
     const s = await stat(src).catch(() => null);
     if (!s?.isDirectory()) {
-      console.log(`  skipped (not found): ${pkgDir}`);
+      logger.log(`  skipped (not found): ${pkgDir}`);
       continue;
     }
+    emit({ phase: "copying", dir: pkgDir });
     const n = await copyFiltered(root, dest, pkgDir, config.ignoreDirs);
     pkgFiles += n;
-    console.log(`  copied ${n} files: ${pkgDir}`);
+    logger.log(`  copied ${n} files: ${pkgDir}`);
   }
 
   // 7. Fix package tsconfig files
-  console.log("Fixing package tsconfig files...");
+  logger.log("Fixing package tsconfig files...");
   await fixPackageTsconfigs(dest, packageDirs);
 
   // 8. Fix app tsconfig files
-  console.log("Fixing app tsconfig files...");
+  logger.log("Fixing app tsconfig files...");
   const appTsconfigPaths = await findAppTsconfigs(dest, config.appDirs);
   await fixAppTsconfigs(dest, appTsconfigPaths);
 
   // 9. Run post-process rules
   if (config.postProcess && config.postProcess.length > 0) {
-    console.log("Running post-process rules...");
+    logger.log("Running post-process rules...");
     const ctx: ExtractContext = { root, dest, config, packageDirs };
-    await runPostProcess(ctx, config.postProcess);
+    await runPostProcess(ctx, config.postProcess, emit);
   }
 
   // 10. Regenerate tsconfig.base.json
@@ -224,7 +274,7 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
 
   // 11. Sample batch data (if configured)
   if (config.batchDataDir) {
-    console.log("Sampling batch data...");
+    logger.log("Sampling batch data...");
     const batchSrc = path.join(root, config.batchDataDir);
     const batchDest = path.join(dest, config.batchDataDir);
     if (
@@ -234,12 +284,12 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
     ) {
       await copyBatchSample(batchSrc, batchDest, HTML_LIMIT);
     } else {
-      console.log("  batch data directory not found, skipping");
+      logger.log("  batch data directory not found, skipping");
     }
   }
 
   // 12. Transform package.json files
-  console.log("Transforming package.json files...");
+  logger.log("Transforming package.json files...");
   const allDirs = [...config.appDirs, ...packageDirs];
   const pkgJsonFiles = await findPackageJsonFiles(dest, allDirs);
   for (const rel of pkgJsonFiles) {
@@ -247,88 +297,109 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
   }
 
   // 13. Generate lockfile
-  console.log(`Generating ${pm} lockfile...`);
+  logger.log(`Generating ${pm} lockfile...`);
   const installBin = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
   try {
     execFileSync(installBin, ["install"], { cwd: dest, stdio: "pipe" });
-    console.log(`  generated ${pm} lockfile`);
+    logger.log(`  generated ${pm} lockfile`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`  ${pm} install FAILED — lockfile not generated`);
-    console.error(`  ${msg.slice(0, 500)}`);
-    throw err;
+    logger.error(`  ${pm} install FAILED — lockfile not generated`);
+    logger.error(`  ${msg.slice(0, 500)}`);
+    throw new PackageManagerError(
+      `${pm} install`,
+      msg.slice(0, 200),
+      err instanceof Error ? err : undefined,
+    );
   }
 
   // 14. Cleanup stray artifacts
-  console.log("Cleaning stray artifacts...");
+  logger.log("Cleaning stray artifacts...");
   await cleanStrayArtifacts(dest);
 
   // 14b. Generate CI workflow
-  console.log("Generating CI workflow...");
+  logger.log("Generating CI workflow...");
   const { mkdir: ciMkdir, writeFile: ciWrite } = await import("node:fs/promises");
   const ciDir = path.join(dest, ".github", "workflows");
   await ciMkdir(ciDir, { recursive: true });
   const ciContent = generateCiWorkflow(pm, config.ci);
   if (ciContent) {
     await ciWrite(path.join(ciDir, "ci.yml"), ciContent);
-    console.log("  generated .github/workflows/ci.yml");
+    logger.log("  generated .github/workflows/ci.yml");
   } else {
-    console.log("  skipped CI workflow (provider: none)");
+    logger.log("  skipped CI workflow (provider: none)");
   }
 
   // 15. Summary
-  console.log("");
-  console.log("=== Export complete ===");
-  console.log(`  destination: ${dest}`);
-  console.log(`  apps files:  ${appFiles}`);
-  console.log(`  package files: ${pkgFiles}`);
+  logger.log("");
+  logger.log("=== Export complete ===");
+  logger.log(`  destination: ${dest}`);
+  logger.log(`  apps files:  ${appFiles}`);
+  logger.log(`  package files: ${pkgFiles}`);
 
   // 15b. Secret scan — abort before git commit if secrets found
+  let secretsScanned = false;
   if (!config.skipSecretScan) {
-    console.log("Scanning for secrets...");
+    emit({ phase: "scanning", dest });
+    logger.log("Scanning for secrets...");
     const findings = await scanForSecrets(dest);
+    secretsScanned = true;
     if (findings.length > 0) {
-      console.error(`\n!!! ABORTED: ${findings.length} secret(s) detected in export !!!`);
-      for (const f of findings) {
-        console.error(`  ${f.file}:${f.line} — ${f.name}`);
-        console.error(`    ${f.preview}`);
-      }
-      console.error(
-        "\nExport aborted. Fix the source files or add directories to ignoreDirs in config.",
-      );
-      process.exit(1);
+      throw new SecretScanError(findings);
     }
-    console.log("  no secrets found");
+    logger.log("  no secrets found");
   }
 
   // 16. Transfer git history (by path prefix)
   const historyPrefixes = [config.projectDir, ...packageDirs];
+  emit({ phase: "gitHistory", prefixes: historyPrefixes });
   await transferGitHistory(root, dest, historyPrefixes);
 
   // 17. Git commit + push
-  await commitExport(dest, changelogCommitMessage, config.git);
+  emit({ phase: "gitCommit", message: changelogCommitMessage });
+  const gitResult = await commitExport(dest, changelogCommitMessage, config.git);
+  if (gitResult.pushed) {
+    emit({ phase: "gitPush", remote: config.git?.remote ?? "origin" });
+  }
+
+  const result: ExtractResult = {
+    dest,
+    mode: "monorepo",
+    filesCopied: appFiles + pkgFiles,
+    packagesCopied: packageDirs.length,
+    gitCommitted: gitResult.committed,
+    gitPushed: gitResult.pushed,
+    changelogGenerated,
+    secretsScanned,
+  };
+  emit({ phase: "complete", result });
+  return result;
 }
 
 async function exportStandalonePackage(
   root: string,
   dest: string,
   config: ExtractConfig,
-): Promise<void> {
+  logger: Logger,
+  emit: (event: ExtractProgressEvent) => void,
+): Promise<ExtractResult> {
   const pm: PackageManager = config.packageManager ?? detectPackageManager(root);
   const changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)}`;
 
   // 1. Clean destination
-  console.log("Cleaning destination...");
+  emit({ phase: "cleaning", dest });
+  logger.log("Cleaning destination...");
   await removeDest(dest);
   await ensureDir(dest);
 
   // 2. Copy package contents
-  console.log("Copying standalone package...");
+  emit({ phase: "copying", dir: config.projectDir });
+  logger.log("Copying standalone package...");
   const fileCount = await copyStandalonePackage(root, dest, config.projectDir, config.ignoreDirs);
-  console.log(`  copied ${fileCount} files`);
+  logger.log(`  copied ${fileCount} files`);
 
   // 3. Rewrite tsconfig.json to be self-contained
-  console.log("Rewriting tsconfig.json (self-contained)...");
+  logger.log("Rewriting tsconfig.json (self-contained)...");
   const tsconfigPath = path.join(dest, "tsconfig.json");
   const { readFile, writeFile } = await import("node:fs/promises");
   const { readFileSync } = await import("node:fs");
@@ -346,12 +417,12 @@ async function exportStandalonePackage(
       delete tsconfig.extends;
       delete tsconfig.compilerOptions.customConditions;
       await writeFile(tsconfigPath, JSON.stringify(tsconfig, null, 2) + "\n");
-      console.log("  inlined base config, removed customConditions");
+      logger.log("  inlined base config, removed customConditions");
     } else {
-      console.log("  no extends to inline, skipping");
+      logger.log("  no extends to inline, skipping");
     }
   } catch {
-    console.log("  no tsconfig.json found, skipping");
+    logger.log("  no tsconfig.json found, skipping");
   }
 
   // 4. Write .gitignore
@@ -368,59 +439,72 @@ async function exportStandalonePackage(
     "",
   ].join("\n");
   await writeFile(path.join(dest, ".gitignore"), gitignoreContent);
-  console.log("  wrote .gitignore");
+  logger.log("  wrote .gitignore");
 
   // 4b. Fix standalone package.json (test script, workspace deps)
-  console.log("Fixing standalone package.json...");
+  logger.log("Fixing standalone package.json...");
   await fixStandalonePackageJson(dest, config, pm, root);
 
   // 4c. Fix vitest.config.ts (relative test paths)
-  console.log("Fixing vitest.config.ts...");
+  logger.log("Fixing vitest.config.ts...");
   await fixStandaloneVitestConfig(dest);
 
   // 5. Clean stray artifacts
-  console.log("Cleaning stray artifacts...");
+  logger.log("Cleaning stray artifacts...");
   await cleanStrayArtifacts(dest);
 
   // 5b. Generate CI workflow
-  console.log("Generating CI workflow...");
+  logger.log("Generating CI workflow...");
   const { mkdir: ciMkdir, writeFile: ciWrite } = await import("node:fs/promises");
   const ciDir = path.join(dest, ".github", "workflows");
   await ciMkdir(ciDir, { recursive: true });
   const ciContent = generateCiWorkflow(pm, config.ci);
   if (ciContent) {
     await ciWrite(path.join(ciDir, "ci.yml"), ciContent);
-    console.log("  generated .github/workflows/ci.yml");
+    logger.log("  generated .github/workflows/ci.yml");
   } else {
-    console.log("  skipped CI workflow (provider: none)");
+    logger.log("  skipped CI workflow (provider: none)");
   }
 
   // 6. Summary
-  console.log("");
-  console.log("=== Export complete ===");
-  console.log(`  destination: ${dest}`);
+  logger.log("");
+  logger.log("=== Export complete ===");
+  logger.log(`  destination: ${dest}`);
 
   // 6b. Secret scan — abort before git commit if secrets found
+  let secretsScanned = false;
   if (!config.skipSecretScan) {
-    console.log("Scanning for secrets...");
+    emit({ phase: "scanning", dest });
+    logger.log("Scanning for secrets...");
     const findings = await scanForSecrets(dest);
+    secretsScanned = true;
     if (findings.length > 0) {
-      console.error(`\n!!! ABORTED: ${findings.length} secret(s) detected in export !!!`);
-      for (const f of findings) {
-        console.error(`  ${f.file}:${f.line} — ${f.name}`);
-        console.error(`    ${f.preview}`);
-      }
-      console.error(
-        "\nExport aborted. Fix the source files or add directories to ignoreDirs in config.",
-      );
-      process.exit(1);
+      throw new SecretScanError(findings);
     }
-    console.log("  no secrets found");
+    logger.log("  no secrets found");
   }
 
   // 7. Transfer git history (by path prefix)
+  emit({ phase: "gitHistory", prefixes: [config.projectDir] });
   await transferGitHistory(root, dest, [config.projectDir]);
 
   // 8. Git commit + push
-  await commitExport(dest, changelogCommitMessage, config.git);
+  emit({ phase: "gitCommit", message: changelogCommitMessage });
+  const gitResult = await commitExport(dest, changelogCommitMessage, config.git);
+  if (gitResult.pushed) {
+    emit({ phase: "gitPush", remote: config.git?.remote ?? "origin" });
+  }
+
+  const result: ExtractResult = {
+    dest,
+    mode: "standalone",
+    filesCopied: fileCount,
+    packagesCopied: 0,
+    gitCommitted: gitResult.committed,
+    gitPushed: gitResult.pushed,
+    changelogGenerated: false,
+    secretsScanned,
+  };
+  emit({ phase: "complete", result });
+  return result;
 }

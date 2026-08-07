@@ -7,18 +7,25 @@
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>Initial post-process rule runner for RFC-0070.</item>
+  <item>RFC-0074: Added optional onProgress callback for per-rule progress events.</item>
 </CHANGE_SUMMARY>
 */
 
 import { readFile, writeFile, rm, cp, mkdir } from "node:fs/promises";
 import * as path from "node:path";
-import type { PostProcessRule, ExtractContext } from "../types.js";
+import type { PostProcessRule, ExtractContext, ProgressCallback } from "../types.js";
 
 export async function runPostProcess(
   ctx: ExtractContext,
   rules: PostProcessRule[],
+  onProgress?: ProgressCallback,
 ): Promise<void> {
   for (const rule of rules) {
+    try {
+      onProgress?.({ phase: "postProcess", rule });
+    } catch {
+      // callback errors are non-fatal
+    }
     switch (rule.action) {
       case "copy":
         await runCopy(ctx, rule);
@@ -58,7 +65,9 @@ async function runPatch(
     const lines = content.split("\n");
     const filtered = lines.filter((l) => !l.includes(rule.removeLinesMatching!));
     content = filtered.join("\n");
-    console.log(`  postProcess patch: removed lines matching "${rule.removeLinesMatching}" from ${rule.file}`);
+    console.log(
+      `  postProcess patch: removed lines matching "${rule.removeLinesMatching}" from ${rule.file}`,
+    );
   } else if (rule.find !== undefined && rule.replace !== undefined) {
     content = content.replaceAll(rule.find, rule.replace);
     console.log(`  postProcess patch: replaced "${rule.find}" → "${rule.replace}" in ${rule.file}`);

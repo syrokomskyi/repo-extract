@@ -7,6 +7,7 @@
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>Initial config schema and loader for RFC-0070.</item>
+  <item>RFC-0071: Added stripScopes, preservePackages, rootPackageName, customConditions, aiEcosystemFiles, monorepoConfigFiles, onlyBuiltDependencies, destBase, packageManager, gitignoreMode. Changed workspacePrefixes default to [] and copyDirs default to [].</item>
 </CHANGE_SUMMARY>
 */
 
@@ -59,9 +60,19 @@ const ExtractConfigSchema = z.object({
   extraGitignore: z.array(z.string()).optional(),
   batchDataDir: z.string().optional(),
   postProcess: z.array(PostProcessRuleSchema).optional(),
-  workspacePrefixes: z.array(z.string()).default(["@syrokomskyi/", "@warpgogol/"]),
+  workspacePrefixes: z.array(z.string()).default([]),
+  stripScopes: z.array(z.string()).optional(),
+  preservePackages: z.array(z.string()).default([]),
+  rootPackageName: z.string().optional(),
+  customConditions: z.array(z.string()).default([]),
+  aiEcosystemFiles: z.array(z.string()).default([]),
+  monorepoConfigFiles: z.array(z.string()).optional(),
+  onlyBuiltDependencies: z.array(z.string()).default([]),
+  destBase: z.string().optional(),
+  packageManager: z.string().optional(),
+  gitignoreMode: z.enum(["minimal", "extended"]).default("extended"),
   git: GitConfigSchema.optional(),
-  copyDirs: z.array(z.string()).optional(),
+  copyDirs: z.array(z.string()).default([]),
   standalone: z.boolean().default(false),
   ignoreDirs: z.array(z.string()).optional(),
   skipSecretScan: z.boolean().optional(),
@@ -70,7 +81,11 @@ const ExtractConfigSchema = z.object({
 export async function loadConfig(configPath: string): Promise<ExtractConfig> {
   const raw = await readFile(configPath, "utf-8");
   const parsed = parseYaml(raw);
-  return ExtractConfigSchema.parse(parsed) as ExtractConfig;
+  const config = ExtractConfigSchema.parse(parsed) as ExtractConfig;
+  if (config.stripScopes === undefined) {
+    config.stripScopes = config.workspacePrefixes;
+  }
+  return config;
 }
 
 export { ExtractConfigSchema };

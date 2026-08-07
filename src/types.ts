@@ -8,6 +8,7 @@
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>Initial types for RFC-0070: ExtractConfig, ExtractContext, PostProcessRule.</item>
+  <item>RFC-0071: Added stripScopes, preservePackages, rootPackageName, customConditions, aiEcosystemFiles, monorepoConfigFiles, onlyBuiltDependencies, destBase, packageManager, gitignoreMode fields.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -49,6 +50,16 @@ export interface ExtractConfig {
   batchDataDir?: string;
   postProcess?: PostProcessRule[];
   workspacePrefixes?: string[];
+  stripScopes?: string[];
+  preservePackages?: string[];
+  rootPackageName?: string;
+  customConditions?: string[];
+  aiEcosystemFiles?: string[];
+  monorepoConfigFiles?: string[];
+  onlyBuiltDependencies?: string[];
+  destBase?: string;
+  packageManager?: string;
+  gitignoreMode?: "minimal" | "extended";
   git?: GitConfig;
   copyDirs?: string[];
   standalone?: boolean;

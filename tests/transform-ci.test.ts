@@ -65,10 +65,13 @@ describe("generateCiWorkflow", () => {
     expect(yaml).toContain("cache: yarn");
   });
 
-  it("includes npm publish with provenance", () => {
+  it("includes npm publish with provenance in a separate publish job", () => {
     const yaml = generateCiWorkflow("pnpm")!;
     expect(yaml).toContain("npm publish --provenance");
     expect(yaml).toContain("NODE_AUTH_TOKEN");
+    expect(yaml).toContain("  publish:");
+    expect(yaml).toContain("    needs: ci");
+    expect(yaml).toContain("registry-url: https://registry.npmjs.org");
   });
 
   it("includes id-token: write permission for provenance", () => {
@@ -76,18 +79,24 @@ describe("generateCiWorkflow", () => {
     expect(yaml).toContain("id-token: write");
   });
 
+  it("publish job only runs on push, not pull_request", () => {
+    const yaml = generateCiWorkflow("pnpm")!;
+    expect(yaml).toContain("if: github.event_name == 'push'");
+  });
+
   it("returns null when provider is none", () => {
     const yaml = generateCiWorkflow("pnpm", { provider: "none", publish: false, nodeVersion: 22 });
     expect(yaml).toBeNull();
   });
 
-  it("omits publish step when publish is false", () => {
+  it("omits publish job when publish is false", () => {
     const yaml = generateCiWorkflow("pnpm", {
       provider: "github-actions",
       publish: false,
       nodeVersion: 22,
     })!;
     expect(yaml).not.toContain("npm publish");
+    expect(yaml).not.toContain("  publish:");
   });
 
   it("uses custom node version", () => {

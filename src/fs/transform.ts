@@ -10,6 +10,7 @@
   <item>ADR-0010: added lint step, npm publish --provenance, and id-token: write to generateCiWorkflow()</item>
   <item>RFC-0071: Replaced hardcoded org-specific values with config-driven options (stripScopes, preservePackages, rootPackageName, customConditions, onlyBuiltDependencies, packageManager, gitignoreMode).</item>
   <item>RFC-0072: Parameterized buildRootPackageJson, generateRootFiles, generateCiWorkflow, fixStandalonePackageJson for pnpm/npm/yarn support.</item>
+  <item>Fix: Split generateCiWorkflow into ci + publish jobs — publish only on push to main, with registry-url for NODE_AUTH_TOKEN.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -475,7 +476,6 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
   const nodeVersion = ci?.nodeVersion ?? 22;
   const publish = ci?.publish ?? true;
 
-  const setupSteps: string[] = [];
   const installCmd =
     pm === "pnpm"
       ? "pnpm install --frozen-lockfile"
@@ -486,15 +486,17 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
   const testCmd = pm === "pnpm" ? "pnpm test" : pm === "yarn" ? "yarn test" : "npm test";
   const cacheKey = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
 
-  setupSteps.push("      - uses: actions/checkout@v5");
-  if (pm === "pnpm") {
-    setupSteps.push("      - uses: pnpm/action-setup@v6");
-  }
-  setupSteps.push("      - uses: actions/setup-node@v5");
-  setupSteps.push("        with:");
-  setupSteps.push(`          node-version: ${nodeVersion}`);
-  setupSteps.push(`          cache: ${cacheKey}`);
-  setupSteps.push(`      - run: ${installCmd}`);
+  const pnpmSetup = pm === "pnpm" ? ["      - uses: pnpm/action-setup@v6"] : [];
+
+  const ciSetupSteps = [
+    "      - uses: actions/checkout@v5",
+    ...pnpmSetup,
+    "      - uses: actions/setup-node@v5",
+    "        with:",
+    `          node-version: ${nodeVersion}`,
+    `          cache: ${cacheKey}`,
+    `      - run: ${installCmd}`,
+  ];
 
   const buildSteps = [
     `      - run: ${runPrefix} lint`,
@@ -503,14 +505,7 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
     `      - run: ${testCmd}`,
   ];
 
-  const publishSteps: string[] = [];
-  if (publish) {
-    publishSteps.push("      - run: npm publish --provenance --access public");
-    publishSteps.push("        env:");
-    publishSteps.push("          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}");
-  }
-
-  return [
+  const lines: string[] = [
     "name: CI",
     "",
     "on:",
@@ -527,11 +522,39 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
     "    runs-on: ubuntu-latest",
     "    timeout-minutes: 15",
     "    steps:",
-    ...setupSteps,
+    ...ciSetupSteps,
     ...buildSteps,
-    ...publishSteps,
-    "",
-  ].join("\n");
+  ];
+
+  if (publish) {
+    lines.push(
+      "",
+      "  publish:",
+      "    needs: ci",
+      "    if: github.event_name == 'push'",
+      "    runs-on: ubuntu-latest",
+      "    timeout-minutes: 10",
+      "    permissions:",
+      "      contents: read",
+      "      id-token: write",
+      "    steps:",
+      "      - uses: actions/checkout@v5",
+      ...pnpmSetup,
+      "      - uses: actions/setup-node@v5",
+      "        with:",
+      `          node-version: ${nodeVersion}`,
+      `          cache: ${cacheKey}`,
+      "          registry-url: https://registry.npmjs.org",
+      `      - run: ${installCmd}`,
+      `      - run: ${runPrefix} build`,
+      "      - run: npm publish --provenance --access public",
+      "        env:",
+      "          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}",
+    );
+  }
+
+  lines.push("");
+  return lines.join("\n");
 }
 
 export async function fixStandalonePackageJson(

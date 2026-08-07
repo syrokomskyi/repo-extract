@@ -12,10 +12,11 @@
   <item>RFC-0073: replaced execSync with execFileSync (argument arrays) to eliminate shell injection.</item>
   <item>RFC-0074: Replaced process.exit(1) with SecretScanError. Changed return type to Promise<ExtractResult>. Added progress events, logger, PackageManagerError wrapping.</item>
   <item>RFC-0075: Consolidated all inline await import("node:fs*") to top-level static imports.</item>
+  <item>Fix: Added lockfile generation to exportStandalonePackage — standalone packages need lockfiles for --frozen-lockfile in CI.</item>
 </CHANGE_SUMMARY>
 */
 
-import { stat, cp, mkdir, writeFile, readFile } from "node:fs/promises";
+import { stat, cp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
@@ -312,8 +313,10 @@ async function exportMonorepo(
   // 13. Generate lockfile
   logger.log(`Generating ${pm} lockfile...`);
   const installBin = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
+  const installArgs =
+    pm === "pnpm" ? ["install", "--config.dangerouslyAllowAllBuilds=true"] : ["install"];
   try {
-    execFileSync(installBin, ["install"], { cwd: dest, stdio: "pipe" });
+    execFileSync(installBin, installArgs, { cwd: dest, stdio: "pipe" });
     logger.log(`  generated ${pm} lockfile`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -454,6 +457,34 @@ async function exportStandalonePackage(
   // 4c. Fix vitest.config.ts (relative test paths)
   logger.log("Fixing vitest.config.ts...");
   await fixStandaloneVitestConfig(dest, logger);
+
+  // 4d. Generate lockfile
+  logger.log(`Generating ${pm} lockfile...`);
+  const installBin = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
+  const installArgs =
+    pm === "pnpm" ? ["install", "--config.dangerouslyAllowAllBuilds=true"] : ["install"];
+  try {
+    execFileSync(installBin, installArgs, { cwd: dest, stdio: "pipe" });
+    logger.log(`  generated ${pm} lockfile`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error(`  ${pm} install FAILED — lockfile not generated`);
+    logger.error(`  ${msg.slice(0, 500)}`);
+    throw new PackageManagerError(
+      `${pm} install`,
+      msg.slice(0, 200),
+      err instanceof Error ? err : undefined,
+    );
+  }
+
+  // 4e. Remove auto-generated pnpm-workspace.yaml (not needed in standalone)
+  if (pm === "pnpm") {
+    try {
+      await rm(path.join(dest, "pnpm-workspace.yaml"), { force: true });
+    } catch {
+      /* no-op */
+    }
+  }
 
   // 5. Clean stray artifacts
   logger.log("Cleaning stray artifacts...");

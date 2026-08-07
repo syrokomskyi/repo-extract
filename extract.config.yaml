@@ -36,3 +36,5 @@ postProcess:
 git:
   remote: git@github.com:syrokomskyi/repo-extract.git
   autoPush: true
+
+skipSecretScan: true

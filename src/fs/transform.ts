@@ -593,7 +593,8 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
       `          cache: ${cacheKey}`,
       `      - run: ${installCmd}`,
       `      - run: ${d.buildCommand}`,
-      `      - run: npx wrangler pages deploy ${d.outputDir} --project-name=${d.projectName}`,
+      `      - run: npx wrangler deploy`,
+      "        working-directory: " + d.outputDir,
       "        env:",
       ...envLines,
     );

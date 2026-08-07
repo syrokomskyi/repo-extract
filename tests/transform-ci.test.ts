@@ -119,15 +119,16 @@ describe("generateCiWorkflow", () => {
       deploy: {
         provider: "cloudflare-pages",
         projectName: "hdri",
-        buildCommand: "pnpm --filter @syrokomskyi/dashboard run build",
-        outputDir: "apps/hdri/dashboard/dist",
+        buildCommand: "pnpm --filter @syrokomskyi/dashboard exec astro build",
+        outputDir: "apps/hdri/dashboard",
         apiTokenSecret: "CLOUDFLARE_API_TOKEN",
       },
     })!;
     expect(yaml).toContain("  deploy:");
     expect(yaml).toContain("needs: ci");
     expect(yaml).toContain("if: github.event_name == 'push'");
-    expect(yaml).toContain("wrangler pages deploy apps/hdri/dashboard/dist --project-name=hdri");
+    expect(yaml).toContain("wrangler deploy");
+    expect(yaml).toContain("working-directory: apps/hdri/dashboard");
     expect(yaml).toContain("          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}");
     expect(yaml).not.toContain("npm publish");
   });

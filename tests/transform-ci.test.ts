@@ -183,6 +183,23 @@ describe("buildRootPackageJson", () => {
     expect(pkg.scripts.build).toContain("yarn workspaces foreach run build");
     expect(pkg.scripts.test).toContain("yarn workspaces foreach run test");
   });
+
+  it("uses pnpm --filter scope when workspaceFilter is set", () => {
+    const config: ExtractConfig = {
+      ...baseConfig,
+      ci: {
+        provider: "github-actions",
+        publish: false,
+        nodeVersion: 22,
+        workspaceFilter: "@acme/dashboard",
+      },
+    };
+    const pkg = buildRootPackageJson("my-app", config, "pnpm") as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts.build).toContain("--filter @acme/dashboard... run --if-present build");
+    expect(pkg.scripts.lint).toContain("--filter @acme/dashboard... run --if-present lint");
+  });
 });
 
 describe("fixStandalonePackageJson", () => {

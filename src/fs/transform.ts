@@ -280,7 +280,7 @@ export function buildGitignore(extraLines: string[] = [], config?: ExtractConfig
   return [...base, ...extra].join("\n");
 }
 
-function rootScripts(pm: PackageManager): Record<string, string> {
+function rootScripts(pm: PackageManager, workspaceFilter?: string): Record<string, string> {
   if (pm === "npm") {
     return {
       build: "npm run build --workspaces --if-present",
@@ -295,6 +295,15 @@ function rootScripts(pm: PackageManager): Record<string, string> {
       typecheck: "yarn workspaces foreach run typecheck",
       lint: "yarn workspaces foreach run lint",
       test: "yarn workspaces foreach run test",
+    };
+  }
+  if (workspaceFilter) {
+    const f = `pnpm --filter ${workspaceFilter}... run --if-present`;
+    return {
+      build: `${f} build`,
+      typecheck: `${f} typecheck`,
+      lint: `${f} lint`,
+      test: `${f} test`,
     };
   }
   return {
@@ -323,7 +332,7 @@ export function buildRootPackageJson(
   const pkg: Record<string, unknown> = {
     name: config.rootPackageName ?? `exported-${destName}`,
     private: true,
-    scripts: rootScripts(pm),
+    scripts: rootScripts(pm, config.ci?.workspaceFilter),
     devDependencies: {
       "@eslint/js": "^10.0.1",
       "@types/node": "^22.10.0",

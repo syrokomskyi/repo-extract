@@ -7,12 +7,13 @@
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>Initial changelog integration for RFC-0070. Uses dynamic import to gracefully handle missing peer dep.</item>
+  <item>RFC-0073: consolidated getLastExportDate — removed local duplicate, imports from fs/git.js.</item>
 </CHANGE_SUMMARY>
 */
 
-import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import * as path from "node:path";
+import { getLastExportDate } from "./fs/git.js";
 
 export interface ChangelogResult {
   skipped: boolean;
@@ -125,19 +126,6 @@ export async function tryAiCommitMessage(dest: string, projectDir: string): Prom
     }
 
     return null;
-  } catch {
-    return null;
-  }
-}
-
-function getLastExportDate(dest: string): string | null {
-  try {
-    const dateStr = execSync("git log -1 --format=%ad --date=format:%Y-%m-%d", {
-      cwd: dest,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    return dateStr || null;
   } catch {
     return null;
   }

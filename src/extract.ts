@@ -9,11 +9,12 @@
   <item>Initial extractProject orchestrator for RFC-0070. Ports main() and exportStandalonePackage() from scripts/export-clients.ts.</item>
   <item>RFC-0071: Replaced hardcoded destBase, AI files, copyDirs defaults with config-driven options. Pass config to transform functions.</item>
   <item>RFC-0072: Added detectPackageManager, parameterized install command, CI workflow, and all transform functions for pnpm/npm/yarn.</item>
+  <item>RFC-0073: replaced execSync with execFileSync (argument arrays) to eliminate shell injection.</item>
 </CHANGE_SUMMARY>
 */
 
 import { stat } from "node:fs/promises";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import type { ExtractConfig, ExtractContext, ExtractOptions, PackageManager } from "./types.js";
 import {
@@ -247,10 +248,9 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
 
   // 13. Generate lockfile
   console.log(`Generating ${pm} lockfile...`);
-  const installCmd =
-    pm === "pnpm" ? "pnpm install" : pm === "yarn" ? "yarn install" : "npm install";
+  const installBin = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
   try {
-    execSync(installCmd, { cwd: dest, stdio: "pipe" });
+    execFileSync(installBin, ["install"], { cwd: dest, stdio: "pipe" });
     console.log(`  generated ${pm} lockfile`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

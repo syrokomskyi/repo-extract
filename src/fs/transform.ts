@@ -557,6 +557,47 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
   return lines.join("\n");
 }
 
+export async function bumpSourceVersion(
+  root: string,
+  config: ExtractConfig,
+  logger?: Logger,
+): Promise<void> {
+  if (!config.versionBump) return;
+
+  const srcPkgPath = path.join(root, config.projectDir, "package.json");
+  let raw: string;
+  try {
+    raw = await readFile(srcPkgPath, "utf-8");
+  } catch {
+    return;
+  }
+
+  const pkg = JSON.parse(raw);
+  if (!pkg.version) return;
+
+  const parts = String(pkg.version).split(".");
+  if (parts.length !== 3) return;
+
+  let [major, minor, patch] = parts.map(Number);
+  if (config.versionBump === "major") {
+    major++;
+    minor = 0;
+    patch = 0;
+  } else if (config.versionBump === "minor") {
+    minor++;
+    patch = 0;
+  } else {
+    patch++;
+  }
+
+  const oldVersion = pkg.version;
+  pkg.version = `${major}.${minor}.${patch}`;
+  await writeFile(srcPkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
+  (logger?.log ?? console.log)(
+    `  bumped source version ${oldVersion} → ${pkg.version} (${config.versionBump})`,
+  );
+}
+
 export async function fixStandalonePackageJson(
   dest: string,
   config: ExtractConfig,
@@ -619,26 +660,6 @@ export async function fixStandalonePackageJson(
     if (version) {
       pkg.packageManager = version;
       changed = true;
-    }
-  }
-
-  if (config.versionBump && pkg.version) {
-    const parts = String(pkg.version).split(".");
-    if (parts.length === 3) {
-      let [major, minor, patch] = parts.map(Number);
-      if (config.versionBump === "major") {
-        major++;
-        minor = 0;
-        patch = 0;
-      } else if (config.versionBump === "minor") {
-        minor++;
-        patch = 0;
-      } else {
-        patch++;
-      }
-      pkg.version = `${major}.${minor}.${patch}`;
-      changed = true;
-      (logger?.log ?? console.log)(`  bumped version to ${pkg.version} (${config.versionBump})`);
     }
   }
 

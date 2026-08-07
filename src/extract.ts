@@ -51,6 +51,7 @@ import {
   fixStandaloneVitestConfig,
   generateCiWorkflow,
   generateRootFiles,
+  bumpSourceVersion,
   regenerateTsconfigBase,
   transformPackageJson,
 } from "./fs/transform.js";
@@ -134,7 +135,13 @@ async function exportMonorepo(
   const pm: PackageManager = config.packageManager ?? detectPackageManager(root, logger);
   const projectDir = path.join(root, config.projectDir);
 
-  // 0. Generate changelog
+  // 0. Bump source version before copy
+  if (config.versionBump) {
+    logger.log("Bumping source version...");
+    await bumpSourceVersion(root, config, logger);
+  }
+
+  // 0b. Generate changelog
   let changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)}`;
   const changelogResult = await tryGenerateChangelog(projectDir, logger);
   let changelogGenerated = false;
@@ -400,6 +407,12 @@ async function exportStandalonePackage(
 ): Promise<ExtractResult> {
   const pm: PackageManager = config.packageManager ?? detectPackageManager(root, logger);
   const changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)}`;
+
+  // 0. Bump source version before copy
+  if (config.versionBump) {
+    logger.log("Bumping source version...");
+    await bumpSourceVersion(root, config, logger);
+  }
 
   // 1. Clean destination
   emit({ phase: "cleaning", dest });

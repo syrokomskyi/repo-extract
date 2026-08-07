@@ -7,6 +7,7 @@ import {
   fixStandalonePackageJson,
   fixStandaloneVitestConfig,
   buildRootPackageJson,
+  bumpSourceVersion,
 } from "../src/fs/transform.js";
 import { detectPackageManager } from "../src/package-manager.js";
 import { getMonorepoConfigFiles } from "../src/fs/copy.js";
@@ -240,37 +241,7 @@ describe("fixStandalonePackageJson", () => {
     expect(result.scripts.test).toBe("vitest run");
   });
 
-  it("bumps patch version when versionBump is patch", async () => {
-    const pkg = { name: "@warpgogol/test", version: "1.2.0" };
-    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
-
-    await fixStandalonePackageJson(tmpDir, { ...baseConfig, versionBump: "patch" }, "pnpm");
-
-    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
-    expect(result.version).toBe("1.2.1");
-  });
-
-  it("bumps minor version when versionBump is minor", async () => {
-    const pkg = { name: "@warpgogol/test", version: "1.2.3" };
-    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
-
-    await fixStandalonePackageJson(tmpDir, { ...baseConfig, versionBump: "minor" }, "pnpm");
-
-    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
-    expect(result.version).toBe("1.3.0");
-  });
-
-  it("bumps major version when versionBump is major", async () => {
-    const pkg = { name: "@warpgogol/test", version: "1.2.3" };
-    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
-
-    await fixStandalonePackageJson(tmpDir, { ...baseConfig, versionBump: "major" }, "pnpm");
-
-    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
-    expect(result.version).toBe("2.0.0");
-  });
-
-  it("does not bump version when versionBump is not set", async () => {
+  it("does not modify version when versionBump is not set", async () => {
     const pkg = { name: "@warpgogol/test", version: "1.2.0" };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
@@ -278,6 +249,80 @@ describe("fixStandalonePackageJson", () => {
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.version).toBe("1.2.0");
+  });
+});
+
+describe("bumpSourceVersion", () => {
+  it("bumps patch version in source package.json", async () => {
+    const srcDir = await mkdtemp();
+    const srcPkgDir = path.join(srcDir, "packages", "test-pkg");
+    await mkdir(srcPkgDir, { recursive: true });
+    await writeFile(
+      path.join(srcPkgDir, "package.json"),
+      JSON.stringify({ name: "@warpgogol/test", version: "1.2.0" }, null, 2),
+    );
+
+    await bumpSourceVersion(srcDir, {
+      ...baseConfig,
+      versionBump: "patch",
+      projectDir: "packages/test-pkg",
+    });
+
+    const srcResult = JSON.parse(await readFile(path.join(srcPkgDir, "package.json"), "utf-8"));
+    expect(srcResult.version).toBe("1.2.1");
+  });
+
+  it("bumps minor version in source package.json", async () => {
+    const srcDir = await mkdtemp();
+    const srcPkgDir = path.join(srcDir, "packages", "test-pkg");
+    await mkdir(srcPkgDir, { recursive: true });
+    await writeFile(
+      path.join(srcPkgDir, "package.json"),
+      JSON.stringify({ name: "@warpgogol/test", version: "1.2.3" }, null, 2),
+    );
+
+    await bumpSourceVersion(srcDir, {
+      ...baseConfig,
+      versionBump: "minor",
+      projectDir: "packages/test-pkg",
+    });
+
+    const srcResult = JSON.parse(await readFile(path.join(srcPkgDir, "package.json"), "utf-8"));
+    expect(srcResult.version).toBe("1.3.0");
+  });
+
+  it("bumps major version in source package.json", async () => {
+    const srcDir = await mkdtemp();
+    const srcPkgDir = path.join(srcDir, "packages", "test-pkg");
+    await mkdir(srcPkgDir, { recursive: true });
+    await writeFile(
+      path.join(srcPkgDir, "package.json"),
+      JSON.stringify({ name: "@warpgogol/test", version: "1.2.3" }, null, 2),
+    );
+
+    await bumpSourceVersion(srcDir, {
+      ...baseConfig,
+      versionBump: "major",
+      projectDir: "packages/test-pkg",
+    });
+
+    const srcResult = JSON.parse(await readFile(path.join(srcPkgDir, "package.json"), "utf-8"));
+    expect(srcResult.version).toBe("2.0.0");
+  });
+
+  it("does nothing when versionBump is not set", async () => {
+    const srcDir = await mkdtemp();
+    const srcPkgDir = path.join(srcDir, "packages", "test-pkg");
+    await mkdir(srcPkgDir, { recursive: true });
+    await writeFile(
+      path.join(srcPkgDir, "package.json"),
+      JSON.stringify({ name: "@warpgogol/test", version: "1.2.0" }, null, 2),
+    );
+
+    await bumpSourceVersion(srcDir, { ...baseConfig, projectDir: "packages/test-pkg" });
+
+    const srcResult = JSON.parse(await readFile(path.join(srcPkgDir, "package.json"), "utf-8"));
+    expect(srcResult.version).toBe("1.2.0");
   });
 });
 

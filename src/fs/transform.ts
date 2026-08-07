@@ -298,12 +298,10 @@ function rootScripts(pm: PackageManager): Record<string, string> {
     };
   }
   return {
-    build:
-      'pnpm --recursive --filter "./apps/**" --filter "./packages/**" exec pnpm run --if-present build',
-    typecheck:
-      'pnpm --recursive --filter "./apps/**" --filter "./packages/**" exec pnpm run --if-present typecheck',
-    lint: 'pnpm --recursive --filter "./apps/**" --filter "./packages/**" exec pnpm run --if-present lint',
-    test: 'pnpm --recursive --filter "./apps/**" --filter "./packages/**" exec pnpm run --if-present test',
+    build: "pnpm -r run --if-present build",
+    typecheck: "pnpm -r run --if-present typecheck",
+    lint: "pnpm -r run --if-present lint",
+    test: "pnpm -r run --if-present test",
   };
 }
 
@@ -501,9 +499,9 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
   ];
 
   const buildSteps = [
+    `      - run: ${runPrefix} build`,
     `      - run: ${runPrefix} lint`,
     `      - run: ${runPrefix} typecheck`,
-    `      - run: ${runPrefix} build`,
     `      - run: ${testCmd}`,
   ];
 

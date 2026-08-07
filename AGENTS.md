@@ -22,6 +22,7 @@ This is a **package** workspace. Expose stable typed APIs. Do not import from ap
 
 | Entry point | Module |
 | --- | --- |
+| `@warpgogol/repo-extract/package.json` | `./package.json` |
 | `@warpgogol/repo-extract` | `./dist/index.d.ts` |
 
 ## Scripts
@@ -29,17 +30,20 @@ This is a **package** workspace. Expose stable typed APIs. Do not import from ap
 | Script | Command |
 | --- | --- |
 | `build` | `tsc -p tsconfig.build.json` |
-| `typecheck` | `tsc -p tsconfig.json --noEmit` |
+| `lint` | `pnpm exec eslint src --ext .ts` |
+| `typecheck` | `tsc -p tsconfig.build.json --noEmit` |
 | `test` | `vitest run` |
 | `changelog` | `changelog-live` |
 | `changelog:init` | `changelog-live init` |
 | `prepublishOnly` | `pnpm run build` |
+| `upgrade-packages` | `pnpm up --latest` |
 
 ## Dependencies
 
 **External:**
 
 - `commander` `^15.0.0`
+- `tslib` `^2.8.1`
 - `yaml` `^2.9.0`
 - `zod` `^4.4.3`
 

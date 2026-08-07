@@ -35,7 +35,9 @@ describe("generateCiWorkflow", () => {
   it("generates a valid CI workflow YAML for pnpm", () => {
     const yaml = generateCiWorkflow("pnpm")!;
     expect(yaml).toContain("name: CI");
-    expect(yaml).toContain("pnpm install --frozen-lockfile");
+    expect(yaml).toContain(
+      "pnpm install --frozen-lockfile --config.dangerouslyAllowAllBuilds=true",
+    );
     expect(yaml).toContain("pnpm run lint");
     expect(yaml).toContain("pnpm run typecheck");
     expect(yaml).toContain("pnpm run build");

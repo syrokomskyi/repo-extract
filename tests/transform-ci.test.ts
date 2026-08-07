@@ -8,6 +8,17 @@ import {
   fixStandaloneVitestConfig,
   buildRootPackageJson,
 } from "../src/fs/transform.js";
+import type { ExtractConfig } from "../src/types.js";
+
+const baseConfig: ExtractConfig = {
+  projectDir: "packages/test",
+  destName: "test",
+  appDirs: [],
+  workspacePrefixes: ["@syrokomskyi/", "@warpgogol/", "@wgogol/"],
+  stripScopes: ["@syrokomskyi/", "@warpgogol/", "@wgogol/"],
+  preservePackages: ["@warpgogol/repo-extract"],
+  packageManager: "pnpm@10.33.0",
+};
 
 async function mkdtemp(): Promise<string> {
   const dir = path.join(
@@ -45,7 +56,7 @@ describe("generateCiWorkflow", () => {
 
 describe("buildRootPackageJson", () => {
   it("includes a test script", () => {
-    const pkg = buildRootPackageJson("my-app") as { scripts: Record<string, string> };
+    const pkg = buildRootPackageJson("my-app", baseConfig) as { scripts: Record<string, string> };
     expect(pkg.scripts.test).toBeDefined();
     expect(pkg.scripts.test).toContain("--if-present test");
   });
@@ -72,7 +83,7 @@ describe("fixStandalonePackageJson", () => {
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
-    await fixStandalonePackageJson(tmpDir);
+    await fixStandalonePackageJson(tmpDir, baseConfig);
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.scripts.test).toBe("vitest run");
@@ -87,7 +98,7 @@ describe("fixStandalonePackageJson", () => {
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
-    await fixStandalonePackageJson(tmpDir);
+    await fixStandalonePackageJson(tmpDir, baseConfig);
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.dependencies.zod).toBe("*");
@@ -105,7 +116,7 @@ describe("fixStandalonePackageJson", () => {
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
-    await fixStandalonePackageJson(tmpDir);
+    await fixStandalonePackageJson(tmpDir, baseConfig);
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.devDependencies).toHaveProperty("@warpgogol/repo-extract");
@@ -129,7 +140,7 @@ describe("fixStandalonePackageJson", () => {
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
-    await fixStandalonePackageJson(tmpDir);
+    await fixStandalonePackageJson(tmpDir, baseConfig);
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.peerDependencies).toHaveProperty("@warpgogol/changelog-live");
@@ -148,10 +159,85 @@ describe("fixStandalonePackageJson", () => {
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
 
-    await fixStandalonePackageJson(tmpDir);
+    await fixStandalonePackageJson(tmpDir, baseConfig);
 
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.scripts.test).toBe("vitest run");
+  });
+});
+
+describe("buildGitignore", () => {
+  it("minimal mode excludes org-specific patterns", async () => {
+    const { buildGitignore } = await import("../src/fs/transform.js");
+    const minimalConfig: ExtractConfig = {
+      ...baseConfig,
+      gitignoreMode: "minimal",
+    };
+    const content = buildGitignore([], minimalConfig);
+    expect(content).not.toContain(".cadence-state.json");
+    expect(content).not.toContain(".pipeline-data/");
+    expect(content).not.toContain("archive/");
+    expect(content).toContain("node_modules");
+    expect(content).toContain("dist");
+  });
+
+  it("extended mode includes extra debug patterns", async () => {
+    const { buildGitignore } = await import("../src/fs/transform.js");
+    const extendedConfig: ExtractConfig = {
+      ...baseConfig,
+      gitignoreMode: "extended",
+    };
+    const content = buildGitignore([], extendedConfig);
+    expect(content).toContain(".output");
+    expect(content).toContain(".debug");
+  });
+});
+
+describe("regenerateTsconfigBase", () => {
+  it("omits customConditions when empty", async () => {
+    const { regenerateTsconfigBase } = await import("../src/fs/transform.js");
+    const tmpDir = await mkdtemp();
+    const emptyConfig: ExtractConfig = {
+      ...baseConfig,
+      customConditions: [],
+    };
+    await regenerateTsconfigBase(tmpDir, emptyConfig);
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "tsconfig.base.json"), "utf-8"));
+    expect(result.compilerOptions.customConditions).toBeUndefined();
+
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("includes customConditions when non-empty", async () => {
+    const { regenerateTsconfigBase } = await import("../src/fs/transform.js");
+    const tmpDir = await mkdtemp();
+    const ccConfig: ExtractConfig = {
+      ...baseConfig,
+      customConditions: ["@acme/source"],
+    };
+    await regenerateTsconfigBase(tmpDir, ccConfig);
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "tsconfig.base.json"), "utf-8"));
+    expect(result.compilerOptions.customConditions).toEqual(["@acme/source"]);
+
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe("buildRootPackageJson default name", () => {
+  it("uses exported-{destName} when rootPackageName not set", () => {
+    const pkg = buildRootPackageJson("my-app", baseConfig) as { name: string };
+    expect(pkg.name).toBe("exported-my-app");
+  });
+
+  it("uses rootPackageName when set", () => {
+    const namedConfig: ExtractConfig = {
+      ...baseConfig,
+      rootPackageName: "@acme/clients-hdri",
+    };
+    const pkg = buildRootPackageJson("hdri", namedConfig) as { name: string };
+    expect(pkg.name).toBe("@acme/clients-hdri");
   });
 });
 

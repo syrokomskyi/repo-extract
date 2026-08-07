@@ -13,7 +13,7 @@ describe("ExtractConfigSchema", () => {
     expect(result.destName).toBe("hdri");
     expect(result.appDirs).toEqual(["apps/hdri/factory", "apps/hdri/dashboard"]);
     expect(result.standalone).toBe(false);
-    expect(result.workspacePrefixes).toEqual(["@syrokomskyi/", "@warpgogol/"]);
+    expect(result.workspacePrefixes).toEqual([]);
   });
 
   it("parses a valid standalone config", () => {
@@ -74,13 +74,15 @@ describe("ExtractConfigSchema", () => {
     expect(() => ExtractConfigSchema.parse(config)).toThrow();
   });
 
-  it("applies default workspacePrefixes", () => {
+  it("defaults stripScopes to workspacePrefixes when not set", () => {
     const config = {
       projectDir: "apps/test",
       destName: "test",
       appDirs: [],
+      workspacePrefixes: ["@acme/"],
     };
     const result = ExtractConfigSchema.parse(config);
-    expect(result.workspacePrefixes).toEqual(["@syrokomskyi/", "@warpgogol/"]);
+    expect(result.workspacePrefixes).toEqual(["@acme/"]);
+    expect(result.stripScopes).toBeUndefined();
   });
 });

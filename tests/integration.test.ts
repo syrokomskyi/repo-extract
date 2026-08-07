@@ -79,6 +79,9 @@ describe("extractProject integration", () => {
       destName: "my-pkg",
       appDirs: [],
       standalone: true,
+      workspacePrefixes: ["@syrokomskyi/", "@warpgogol/"],
+      stripScopes: ["@syrokomskyi/", "@warpgogol/", "@wgogol/"],
+      preservePackages: ["@warpgogol/repo-extract"],
     };
 
     const origCwd = process.cwd();
@@ -106,6 +109,9 @@ describe("extractProject integration", () => {
       destName: "my-pkg",
       appDirs: [],
       standalone: true,
+      workspacePrefixes: ["@syrokomskyi/", "@warpgogol/"],
+      stripScopes: ["@syrokomskyi/", "@warpgogol/", "@wgogol/"],
+      preservePackages: ["@warpgogol/repo-extract"],
     };
 
     const origCwd = process.cwd();

@@ -11,10 +11,12 @@
   <item>RFC-0072: Added detectPackageManager, parameterized install command, CI workflow, and all transform functions for pnpm/npm/yarn.</item>
   <item>RFC-0073: replaced execSync with execFileSync (argument arrays) to eliminate shell injection.</item>
   <item>RFC-0074: Replaced process.exit(1) with SecretScanError. Changed return type to Promise<ExtractResult>. Added progress events, logger, PackageManagerError wrapping.</item>
+  <item>RFC-0075: Consolidated all inline await import("node:fs*") to top-level static imports.</item>
 </CHANGE_SUMMARY>
 */
 
-import { stat } from "node:fs/promises";
+import { stat, cp, mkdir, writeFile, readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import type {
@@ -152,7 +154,6 @@ async function exportMonorepo(
     const src = path.join(root, file);
     const destPath = path.join(dest, file);
     try {
-      const { cp } = await import("node:fs/promises");
       await cp(src, destPath);
       logger.log(`  copied: ${file}`);
     } catch {
@@ -167,7 +168,6 @@ async function exportMonorepo(
       const src = path.join(root, config.projectDir, file);
       const destPath = path.join(dest, file);
       try {
-        const { cp } = await import("node:fs/promises");
         await cp(src, destPath);
         logger.log(`  copied: ${file}`);
       } catch {
@@ -183,7 +183,6 @@ async function exportMonorepo(
     const src = path.join(root, f);
     const destPath = path.join(dest, f);
     try {
-      const { cp } = await import("node:fs/promises");
       await cp(src, destPath);
       logger.log(`  copied: ${f}`);
     } catch {
@@ -195,7 +194,6 @@ async function exportMonorepo(
     const src = path.join(root, copyDir);
     const destPath = path.join(dest, copyDir);
     try {
-      const { cp } = await import("node:fs/promises");
       await cp(src, destPath, {
         recursive: true,
         filter: (s: string) => {
@@ -232,7 +230,14 @@ async function exportMonorepo(
       continue;
     }
     emit({ phase: "copying", dir: appDir });
-    const n = await copyFiltered(root, dest, appDir, config.ignoreDirs);
+    const n = await copyFiltered(
+      root,
+      dest,
+      appDir,
+      config.ignoreDirs,
+      config.excludePathSegments,
+      config.excludeExtensions,
+    );
     appFiles += n;
     logger.log(`  copied ${n} files: ${appDir}`);
   }
@@ -248,7 +253,14 @@ async function exportMonorepo(
       continue;
     }
     emit({ phase: "copying", dir: pkgDir });
-    const n = await copyFiltered(root, dest, pkgDir, config.ignoreDirs);
+    const n = await copyFiltered(
+      root,
+      dest,
+      pkgDir,
+      config.ignoreDirs,
+      config.excludePathSegments,
+      config.excludeExtensions,
+    );
     pkgFiles += n;
     logger.log(`  copied ${n} files: ${pkgDir}`);
   }
@@ -319,12 +331,11 @@ async function exportMonorepo(
 
   // 14b. Generate CI workflow
   logger.log("Generating CI workflow...");
-  const { mkdir: ciMkdir, writeFile: ciWrite } = await import("node:fs/promises");
   const ciDir = path.join(dest, ".github", "workflows");
-  await ciMkdir(ciDir, { recursive: true });
+  await mkdir(ciDir, { recursive: true });
   const ciContent = generateCiWorkflow(pm, config.ci);
   if (ciContent) {
-    await ciWrite(path.join(ciDir, "ci.yml"), ciContent);
+    await writeFile(path.join(ciDir, "ci.yml"), ciContent);
     logger.log("  generated .github/workflows/ci.yml");
   } else {
     logger.log("  skipped CI workflow (provider: none)");
@@ -395,14 +406,19 @@ async function exportStandalonePackage(
   // 2. Copy package contents
   emit({ phase: "copying", dir: config.projectDir });
   logger.log("Copying standalone package...");
-  const fileCount = await copyStandalonePackage(root, dest, config.projectDir, config.ignoreDirs);
+  const fileCount = await copyStandalonePackage(
+    root,
+    dest,
+    config.projectDir,
+    config.ignoreDirs,
+    config.excludePathSegments,
+    config.excludeExtensions,
+  );
   logger.log(`  copied ${fileCount} files`);
 
   // 3. Rewrite tsconfig.json to be self-contained
   logger.log("Rewriting tsconfig.json (self-contained)...");
   const tsconfigPath = path.join(dest, "tsconfig.json");
-  const { readFile, writeFile } = await import("node:fs/promises");
-  const { readFileSync } = await import("node:fs");
   try {
     const tsconfig = JSON.parse(await readFile(tsconfigPath, "utf-8"));
     if (tsconfig.extends && tsconfig.extends.includes("../")) {
@@ -455,12 +471,11 @@ async function exportStandalonePackage(
 
   // 5b. Generate CI workflow
   logger.log("Generating CI workflow...");
-  const { mkdir: ciMkdir, writeFile: ciWrite } = await import("node:fs/promises");
   const ciDir = path.join(dest, ".github", "workflows");
-  await ciMkdir(ciDir, { recursive: true });
+  await mkdir(ciDir, { recursive: true });
   const ciContent = generateCiWorkflow(pm, config.ci);
   if (ciContent) {
-    await ciWrite(path.join(ciDir, "ci.yml"), ciContent);
+    await writeFile(path.join(ciDir, "ci.yml"), ciContent);
     logger.log("  generated .github/workflows/ci.yml");
   } else {
     logger.log("  skipped CI workflow (provider: none)");

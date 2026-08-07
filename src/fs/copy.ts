@@ -10,10 +10,11 @@
   <item>Ported copyFiltered, copyStandalonePackage, removeDest from scripts/export-clients-helpers.ts for RFC-0070.</item>
   <item>RFC-0071: Split IGNORE_DIRS into BASE_IGNORE_DIRS (org-neutral) and config-driven ignoreDirs. MONOREPO_CONFIG_FILES kept as auto-detect candidate list.</item>
   <item>RFC-0072: Extended IGNORE_FILES with package-lock.json and yarn.lock. Added getMonorepoConfigFiles(pm) to filter pnpm-workspace.yaml for npm/yarn.</item>
+  <item>RFC-0075: Consolidated inline import in truncateCsv to top-level. Made isKeyMaterial/isDbFile configurable via excludePathSegments/excludeExtensions.</item>
 </CHANGE_SUMMARY>
 */
 
-import { cp, mkdir, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, readdir, rm, readFile, writeFile } from "node:fs/promises";
 import * as fsSync from "node:fs";
 import * as path from "node:path";
 import type { Dirent } from "node:fs";
@@ -68,12 +69,14 @@ export function isIgnored(name: string, extraIgnoreDirs?: string[]): boolean {
   return false;
 }
 
-export function isKeyMaterial(relPath: string): boolean {
-  return relPath.includes(".input" + path.sep + "signing-key");
+export function isKeyMaterial(relPath: string, excludePathSegments?: string[]): boolean {
+  const segments = excludePathSegments ?? [".input" + path.sep + "signing-key"];
+  return segments.some((seg) => relPath.includes(seg));
 }
 
-export function isDbFile(name: string): boolean {
-  return name.endsWith(".db");
+export function isDbFile(name: string, excludeExtensions?: string[]): boolean {
+  const extensions = excludeExtensions ?? [".db"];
+  return extensions.some((ext) => name.endsWith(ext));
 }
 
 export async function ensureDir(p: string): Promise<void> {
@@ -103,6 +106,8 @@ export async function copyFiltered(
   destRoot: string,
   subDir: string = "",
   extraIgnoreDirs?: string[],
+  excludePathSegments?: string[],
+  excludeExtensions?: string[],
 ): Promise<number> {
   const srcDir = path.join(srcRoot, subDir);
   const destDir = path.join(destRoot, subDir);
@@ -121,13 +126,25 @@ export async function copyFiltered(
 
     if (relPath.includes(".input" + path.sep + "batches")) continue;
 
-    if (isIgnored(name, extraIgnoreDirs) || isKeyMaterial(relPath) || isDbFile(name)) continue;
+    if (
+      isIgnored(name, extraIgnoreDirs) ||
+      isKeyMaterial(relPath, excludePathSegments) ||
+      isDbFile(name, excludeExtensions)
+    )
+      continue;
 
     const srcPath = path.join(srcDir, name);
     const destPath = path.join(destDir, name);
 
     if (entry.isDirectory()) {
-      count += await copyFiltered(srcRoot, destRoot, relPath, extraIgnoreDirs);
+      count += await copyFiltered(
+        srcRoot,
+        destRoot,
+        relPath,
+        extraIgnoreDirs,
+        excludePathSegments,
+        excludeExtensions,
+      );
     } else if (entry.isFile()) {
       await copyFile(srcPath, destPath);
       count++;
@@ -141,6 +158,8 @@ export async function copyStandalonePackage(
   dest: string,
   packageDir: string,
   ignoreDirs?: string[],
+  excludePathSegments?: string[],
+  excludeExtensions?: string[],
 ): Promise<number> {
   const srcDir = path.join(srcRoot, packageDir);
   const skipNames = new Set(["node_modules", ".turbo", "changelog.config.yaml"]);
@@ -155,6 +174,9 @@ export async function copyStandalonePackage(
       if (src === srcDir) return true;
       const name = path.basename(src);
       if (skipNames.has(name) || name.endsWith(".tsbuildinfo")) return false;
+      const relPath = path.relative(srcDir, src);
+      if (isKeyMaterial(relPath, excludePathSegments) || isDbFile(name, excludeExtensions))
+        return false;
       try {
         if (fsSync.statSync(src).isFile()) count++;
       } catch {
@@ -238,7 +260,6 @@ export async function truncateCsv(
   destPath: string,
   csvLimit: number,
 ): Promise<void> {
-  const { readFile, writeFile } = await import("node:fs/promises");
   const content = await readFile(srcPath, "utf-8");
   const lines = content.split("\n");
   const header = lines[0] || "";

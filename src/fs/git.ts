@@ -9,6 +9,7 @@
   <item>Initial git helpers for RFC-0070. Ported commitExport from scripts/export-clients.ts.</item>
   <item>RFC-0073: replaced all execSync with execFileSync (argument arrays) to eliminate shell injection.</item>
   <item>RFC-0074: Wrapped execFileSync calls with GitOperationError. Changed commitExport return to { committed, pushed }.</item>
+  <item>RFC-0075: Added Windows multi-prefix guard in transferGitHistory().</item>
 </CHANGE_SUMMARY>
 */
 
@@ -152,6 +153,13 @@ export async function transferGitHistory(
   }
 
   console.log(`Transferring git history for paths: ${pathPrefixes.join(", ")}...`);
+
+  if (process.platform === "win32" && pathPrefixes.length > 1) {
+    throw new Error(
+      "Multi-prefix git history transfer is not supported on Windows. " +
+        "Use WSL or Git Bash, or export with a single path prefix.",
+    );
+  }
 
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), "repo-extract-history-"));
 

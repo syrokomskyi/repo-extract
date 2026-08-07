@@ -9,6 +9,7 @@
   <item>Initial config schema and loader for RFC-0070.</item>
   <item>RFC-0071: Added stripScopes, preservePackages, rootPackageName, customConditions, aiEcosystemFiles, monorepoConfigFiles, onlyBuiltDependencies, destBase, packageManager, gitignoreMode. Changed workspacePrefixes default to [] and copyDirs default to [].</item>
   <item>RFC-0072: Changed packageManager from string to enum. Added CiConfigSchema and ci field.</item>
+  <item>RFC-0075: Added excludePathSegments and excludeExtensions fields.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -84,6 +85,8 @@ const ExtractConfigSchema = z.object({
   copyDirs: z.array(z.string()).default([]),
   standalone: z.boolean().default(false),
   ignoreDirs: z.array(z.string()).optional(),
+  excludePathSegments: z.array(z.string()).optional(),
+  excludeExtensions: z.array(z.string()).optional(),
   skipSecretScan: z.boolean().optional(),
 });
 

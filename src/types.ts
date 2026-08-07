@@ -11,6 +11,7 @@
   <item>RFC-0071: Added stripScopes, preservePackages, rootPackageName, customConditions, aiEcosystemFiles, monorepoConfigFiles, onlyBuiltDependencies, destBase, packageManager, gitignoreMode fields.</item>
   <item>RFC-0072: Changed packageManager from string to PackageManager enum. Added CiConfig interface and ci field.</item>
   <item>RFC-0074: Added ExtractResult, ExtractProgressEvent, ProgressCallback types. Added onProgress to ExtractOptions.</item>
+  <item>RFC-0075: Added excludePathSegments and excludeExtensions fields for config-driven file exclusion.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -76,6 +77,8 @@ export interface ExtractConfig {
   copyDirs?: string[];
   standalone?: boolean;
   ignoreDirs?: string[];
+  excludePathSegments?: string[];
+  excludeExtensions?: string[];
   skipSecretScan?: boolean;
 }
 

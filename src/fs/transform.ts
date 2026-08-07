@@ -348,6 +348,9 @@ export function buildRootPackageJson(
     if (version) {
       pkg.packageManager = version;
     }
+    pkg.pnpm = {
+      onlyBuiltDependencies: ["esbuild", "workerd", "better-sqlite3"],
+    };
   }
 
   return pkg;

@@ -150,6 +150,12 @@ await extractProject(config, { dest: "../my-package" });
 
 [CHANGELOG.md](CHANGELOG.md)
 
+## Community
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security](SECURITY.md)
+
 ## License
 
-Apache-2.0
+Apache-2.0 — see [LICENSE](LICENSE)

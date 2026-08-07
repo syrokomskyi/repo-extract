@@ -14,11 +14,13 @@
 import { readFile, writeFile, rm, cp, mkdir } from "node:fs/promises";
 import * as path from "node:path";
 import type { PostProcessRule, ExtractContext, ProgressCallback } from "../types.js";
+import type { Logger } from "../log.js";
 
 export async function runPostProcess(
   ctx: ExtractContext,
   rules: PostProcessRule[],
   onProgress?: ProgressCallback,
+  logger?: Logger,
 ): Promise<void> {
   for (const rule of rules) {
     try {
@@ -28,36 +30,42 @@ export async function runPostProcess(
     }
     switch (rule.action) {
       case "copy":
-        await runCopy(ctx, rule);
+        await runCopy(ctx, rule, logger);
         break;
       case "patch":
-        await runPatch(ctx, rule);
+        await runPatch(ctx, rule, logger);
         break;
       case "delete":
-        await runDelete(ctx, rule);
+        await runDelete(ctx, rule, logger);
         break;
     }
   }
 }
 
-async function runCopy(ctx: ExtractContext, rule: { from: string; to: string }): Promise<void> {
+async function runCopy(
+  ctx: ExtractContext,
+  rule: { from: string; to: string },
+  logger?: Logger,
+): Promise<void> {
   const src = path.join(ctx.root, rule.from);
   const dest = path.join(ctx.dest, rule.to);
   await mkdir(path.dirname(dest), { recursive: true });
   await cp(src, dest);
-  console.log(`  postProcess copy: ${rule.from} → ${rule.to}`);
+  (logger?.log ?? console.log)(`  postProcess copy: ${rule.from} → ${rule.to}`);
 }
 
 async function runPatch(
   ctx: ExtractContext,
   rule: { file: string; find?: string; replace?: string; removeLinesMatching?: string },
+  logger?: Logger,
 ): Promise<void> {
+  const log = logger?.log ?? console.log;
   const fullPath = path.join(ctx.dest, rule.file);
   let content: string;
   try {
     content = await readFile(fullPath, "utf-8");
   } catch {
-    console.log(`  postProcess patch: skipped (not found: ${rule.file})`);
+    log(`  postProcess patch: skipped (not found: ${rule.file})`);
     return;
   }
 
@@ -65,19 +73,23 @@ async function runPatch(
     const lines = content.split("\n");
     const filtered = lines.filter((l) => !l.includes(rule.removeLinesMatching!));
     content = filtered.join("\n");
-    console.log(
+    log(
       `  postProcess patch: removed lines matching "${rule.removeLinesMatching}" from ${rule.file}`,
     );
   } else if (rule.find !== undefined && rule.replace !== undefined) {
     content = content.replaceAll(rule.find, rule.replace);
-    console.log(`  postProcess patch: replaced "${rule.find}" → "${rule.replace}" in ${rule.file}`);
+    log(`  postProcess patch: replaced "${rule.find}" → "${rule.replace}" in ${rule.file}`);
   }
 
   await writeFile(fullPath, content, "utf-8");
 }
 
-async function runDelete(ctx: ExtractContext, rule: { path: string }): Promise<void> {
+async function runDelete(
+  ctx: ExtractContext,
+  rule: { path: string },
+  logger?: Logger,
+): Promise<void> {
   const fullPath = path.join(ctx.dest, rule.path);
   await rm(fullPath, { recursive: true, force: true });
-  console.log(`  postProcess delete: ${rule.path}`);
+  (logger?.log ?? console.log)(`  postProcess delete: ${rule.path}`);
 }

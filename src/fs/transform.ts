@@ -18,12 +18,14 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import type { Dirent } from "node:fs";
 import type { ExtractConfig, PackageManager, CiConfig } from "../types.js";
+import type { Logger } from "../log.js";
 import { isIgnored } from "./copy.js";
 
 export async function transformPackageJson(
   dest: string,
   relPath: string,
   config: ExtractConfig,
+  logger?: Logger,
 ): Promise<void> {
   const fullPath = path.join(dest, relPath);
   let raw: string;
@@ -81,7 +83,7 @@ export async function transformPackageJson(
 
   if (changed) {
     await writeFile(fullPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
-    console.log(`  transformed: ${relPath}`);
+    (logger?.log ?? console.log)(`  transformed: ${relPath}`);
   }
 }
 
@@ -159,7 +161,11 @@ export async function fixAppTsconfigs(dest: string, appTsconfigPaths: string[]):
   }
 }
 
-export async function regenerateTsconfigBase(dest: string, config: ExtractConfig): Promise<void> {
+export async function regenerateTsconfigBase(
+  dest: string,
+  config: ExtractConfig,
+  logger?: Logger,
+): Promise<void> {
   const compilerOptions: Record<string, unknown> = {
     composite: true,
     declarationMap: true,
@@ -188,7 +194,7 @@ export async function regenerateTsconfigBase(dest: string, config: ExtractConfig
     path.join(dest, "tsconfig.base.json"),
     JSON.stringify(baseTsconfig, null, 2) + "\n",
   );
-  console.log("  regenerated tsconfig.base.json");
+  (logger?.log ?? console.log)("  regenerated tsconfig.base.json");
 }
 
 export async function findAppTsconfigs(dest: string, appDirs: string[]): Promise<string[]> {
@@ -344,6 +350,7 @@ export async function generateRootFiles(
   packageDirs: string[],
   appDirs: string[],
   pm: PackageManager,
+  logger?: Logger,
 ): Promise<void> {
   const rootPkg = buildRootPackageJson(config.destName, config, pm, root);
 
@@ -425,7 +432,9 @@ export async function generateRootFiles(
   await writeFile(path.join(dest, "tsconfig.json"), JSON.stringify(tsconfig, null, 2) + "\n");
 
   const workspaceFile = pm === "pnpm" ? "pnpm-workspace.yaml" : "(workspaces in package.json)";
-  console.log(`  generated: package.json, ${workspaceFile}, .gitignore, tsconfig.json`);
+  (logger?.log ?? console.log)(
+    `  generated: package.json, ${workspaceFile}, .gitignore, tsconfig.json`,
+  );
 }
 
 export async function cleanStrayArtifacts(dest: string): Promise<void> {
@@ -530,6 +539,7 @@ export async function fixStandalonePackageJson(
   config: ExtractConfig,
   pm: PackageManager,
   root?: string,
+  logger?: Logger,
 ): Promise<void> {
   const pkgPath = path.join(dest, "package.json");
   let raw: string;
@@ -591,11 +601,13 @@ export async function fixStandalonePackageJson(
 
   if (changed) {
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
-    console.log("  fixed standalone package.json (test script, workspace deps, packageManager)");
+    (logger?.log ?? console.log)(
+      "  fixed standalone package.json (test script, workspace deps, packageManager)",
+    );
   }
 }
 
-export async function fixStandaloneVitestConfig(dest: string): Promise<void> {
+export async function fixStandaloneVitestConfig(dest: string, logger?: Logger): Promise<void> {
   const configPath = path.join(dest, "vitest.config.ts");
   let raw: string;
   try {
@@ -608,6 +620,6 @@ export async function fixStandaloneVitestConfig(dest: string): Promise<void> {
 
   if (fixed !== raw) {
     await writeFile(configPath, fixed, "utf-8");
-    console.log("  fixed vitest.config.ts (relative test paths)");
+    (logger?.log ?? console.log)("  fixed vitest.config.ts (relative test paths)");
   }
 }

@@ -14,6 +14,7 @@
 
 import { existsSync } from "node:fs";
 import * as path from "node:path";
+import type { Logger } from "./log.js";
 
 export interface ChangelogResult {
   skipped: boolean;
@@ -22,7 +23,11 @@ export interface ChangelogResult {
   filesWritten: string[];
 }
 
-export async function tryGenerateChangelog(projectDir: string): Promise<ChangelogResult> {
+export async function tryGenerateChangelog(
+  projectDir: string,
+  logger?: Logger,
+): Promise<ChangelogResult> {
+  const log = logger?.log ?? console.log;
   const changelogConfigPath = path.join(projectDir, "changelog.config.yaml");
   if (!existsSync(changelogConfigPath)) {
     return { skipped: true, sectionsGenerated: 0, filesWritten: [] };
@@ -42,8 +47,8 @@ export async function tryGenerateChangelog(projectDir: string): Promise<Changelo
       filesWritten: result.filesWritten,
     };
   } catch (err) {
-    console.log("  changelog generation skipped (peer dep not installed or error)");
-    console.log(`  ${(err instanceof Error ? err.message : String(err)).slice(0, 200)}`);
+    log("  changelog generation skipped (peer dep not installed or error)");
+    log(`  ${(err instanceof Error ? err.message : String(err)).slice(0, 200)}`);
     return { skipped: true, sectionsGenerated: 0, filesWritten: [] };
   }
 }

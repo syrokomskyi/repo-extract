@@ -130,12 +130,12 @@ async function exportMonorepo(
   logger: Logger,
   emit: (event: ExtractProgressEvent) => void,
 ): Promise<ExtractResult> {
-  const pm: PackageManager = config.packageManager ?? detectPackageManager(root);
+  const pm: PackageManager = config.packageManager ?? detectPackageManager(root, logger);
   const projectDir = path.join(root, config.projectDir);
 
   // 0. Generate changelog
   let changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)}`;
-  const changelogResult = await tryGenerateChangelog(projectDir);
+  const changelogResult = await tryGenerateChangelog(projectDir, logger);
   let changelogGenerated = false;
   if (!changelogResult.skipped && changelogResult.commitMessage) {
     changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)} — ${changelogResult.commitMessage}`;
@@ -218,7 +218,7 @@ async function exportMonorepo(
     logger.log(`  found ${packageDirs.length} packages: ${packageDirs.join(", ")}`);
   }
 
-  await generateRootFiles(dest, root, config, packageDirs, config.appDirs, pm);
+  await generateRootFiles(dest, root, config, packageDirs, config.appDirs, pm, logger);
 
   // 5. Copy apps with filtering
   logger.log("Copying apps...");
@@ -279,11 +279,11 @@ async function exportMonorepo(
   if (config.postProcess && config.postProcess.length > 0) {
     logger.log("Running post-process rules...");
     const ctx: ExtractContext = { root, dest, config, packageDirs };
-    await runPostProcess(ctx, config.postProcess, emit);
+    await runPostProcess(ctx, config.postProcess, emit, logger);
   }
 
   // 10. Regenerate tsconfig.base.json
-  await regenerateTsconfigBase(dest, config);
+  await regenerateTsconfigBase(dest, config, logger);
 
   // 11. Sample batch data (if configured)
   if (config.batchDataDir) {
@@ -295,7 +295,7 @@ async function exportMonorepo(
         .then((s) => s.isDirectory())
         .catch(() => false)
     ) {
-      await copyBatchSample(batchSrc, batchDest, HTML_LIMIT);
+      await copyBatchSample(batchSrc, batchDest, HTML_LIMIT, logger);
     } else {
       logger.log("  batch data directory not found, skipping");
     }
@@ -306,7 +306,7 @@ async function exportMonorepo(
   const allDirs = [...config.appDirs, ...packageDirs];
   const pkgJsonFiles = await findPackageJsonFiles(dest, allDirs);
   for (const rel of pkgJsonFiles) {
-    await transformPackageJson(dest, rel, config);
+    await transformPackageJson(dest, rel, config, logger);
   }
 
   // 13. Generate lockfile
@@ -354,7 +354,7 @@ async function exportMonorepo(
   if (!config.skipSecretScan) {
     emit({ phase: "scanning", dest });
     logger.log("Scanning for secrets...");
-    const findings = await scanForSecrets(dest);
+    const findings = await scanForSecrets(dest, logger);
     secretsScanned = true;
     if (findings.length > 0) {
       throw new SecretScanError(findings);
@@ -365,11 +365,11 @@ async function exportMonorepo(
   // 16. Transfer git history (by path prefix)
   const historyPrefixes = [config.projectDir, ...packageDirs];
   emit({ phase: "gitHistory", prefixes: historyPrefixes });
-  await transferGitHistory(root, dest, historyPrefixes);
+  await transferGitHistory(root, dest, historyPrefixes, logger);
 
   // 17. Git commit + push
   emit({ phase: "gitCommit", message: changelogCommitMessage });
-  const gitResult = await commitExport(dest, changelogCommitMessage, config.git);
+  const gitResult = await commitExport(dest, changelogCommitMessage, config.git, logger);
   if (gitResult.pushed) {
     emit({ phase: "gitPush", remote: config.git?.remote ?? "origin" });
   }
@@ -395,7 +395,7 @@ async function exportStandalonePackage(
   logger: Logger,
   emit: (event: ExtractProgressEvent) => void,
 ): Promise<ExtractResult> {
-  const pm: PackageManager = config.packageManager ?? detectPackageManager(root);
+  const pm: PackageManager = config.packageManager ?? detectPackageManager(root, logger);
   const changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)}`;
 
   // 1. Clean destination
@@ -449,11 +449,11 @@ async function exportStandalonePackage(
 
   // 4b. Fix standalone package.json (test script, workspace deps)
   logger.log("Fixing standalone package.json...");
-  await fixStandalonePackageJson(dest, config, pm, root);
+  await fixStandalonePackageJson(dest, config, pm, root, logger);
 
   // 4c. Fix vitest.config.ts (relative test paths)
   logger.log("Fixing vitest.config.ts...");
-  await fixStandaloneVitestConfig(dest);
+  await fixStandaloneVitestConfig(dest, logger);
 
   // 5. Clean stray artifacts
   logger.log("Cleaning stray artifacts...");
@@ -481,7 +481,7 @@ async function exportStandalonePackage(
   if (!config.skipSecretScan) {
     emit({ phase: "scanning", dest });
     logger.log("Scanning for secrets...");
-    const findings = await scanForSecrets(dest);
+    const findings = await scanForSecrets(dest, logger);
     secretsScanned = true;
     if (findings.length > 0) {
       throw new SecretScanError(findings);
@@ -491,11 +491,11 @@ async function exportStandalonePackage(
 
   // 7. Transfer git history (by path prefix)
   emit({ phase: "gitHistory", prefixes: [config.projectDir] });
-  await transferGitHistory(root, dest, [config.projectDir]);
+  await transferGitHistory(root, dest, [config.projectDir], logger);
 
   // 8. Git commit + push
   emit({ phase: "gitCommit", message: changelogCommitMessage });
-  const gitResult = await commitExport(dest, changelogCommitMessage, config.git);
+  const gitResult = await commitExport(dest, changelogCommitMessage, config.git, logger);
   if (gitResult.pushed) {
     emit({ phase: "gitPush", remote: config.git?.remote ?? "origin" });
   }

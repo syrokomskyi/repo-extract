@@ -19,6 +19,7 @@ import * as fsSync from "node:fs";
 import * as path from "node:path";
 import type { Dirent } from "node:fs";
 import type { PackageManager } from "../types.js";
+import type { Logger } from "../log.js";
 
 const BASE_IGNORE_DIRS = new Set([
   "node_modules",
@@ -195,6 +196,7 @@ export async function copyBatchSample(
   srcRoot: string,
   destRoot: string,
   htmlLimit: number,
+  logger?: Logger,
 ): Promise<void> {
   let htmlCount = 0;
 
@@ -252,7 +254,7 @@ export async function copyBatchSample(
 
   await walk("");
   const files = htmlCount <= htmlLimit ? htmlCount : htmlLimit;
-  console.log(`  batch HTML files sampled: ${files}`);
+  (logger?.log ?? console.log)(`  batch HTML files sampled: ${files}`);
 }
 
 const CSV_LIMIT = 50;

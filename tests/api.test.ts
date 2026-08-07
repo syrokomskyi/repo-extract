@@ -152,7 +152,7 @@ describe("extractProject API", () => {
     }
   });
 
-  it("verbose: false suppresses extract.ts logger output", async () => {
+  it("verbose: false suppresses all console.log output", async () => {
     await setupStandalonePkg();
     const config = makeStandaloneConfig();
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -163,10 +163,9 @@ describe("extractProject API", () => {
     } finally {
       process.chdir(origCwd);
     }
-    const calls = logSpy.mock.calls.map((c) => String(c[0]));
-    expect(calls.some((c) => c.includes("Exporting"))).toBe(false);
-    expect(calls.some((c) => c.includes("Cleaning destination"))).toBe(false);
-    expect(calls.some((c) => c.includes("Copying standalone"))).toBe(false);
+    // With verbose: false, the Logger is a no-op, so no console.log calls
+    // should be made from any module (extract, git, transform, copy, etc.)
+    expect(logSpy).not.toHaveBeenCalled();
     logSpy.mockRestore();
   });
 

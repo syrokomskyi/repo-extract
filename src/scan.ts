@@ -14,6 +14,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import * as path from "node:path";
 import type { SecretFinding } from "./types.js";
+import type { Logger } from "./log.js";
 
 const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   { name: "AWS Access Key ID", pattern: /AKIA[0-9A-Z]{16}/g },
@@ -36,19 +37,25 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1 MB — skip larger files
 
-export async function scanForSecrets(dest: string): Promise<SecretFinding[]> {
+export async function scanForSecrets(dest: string, logger?: Logger): Promise<SecretFinding[]> {
+  const log = logger?.log ?? console.log;
   const findings: SecretFinding[] = [];
-  await scanDir(dest, dest, findings);
+  await scanDir(dest, dest, findings, log);
   return findings;
 }
 
-async function scanDir(root: string, dir: string, findings: SecretFinding[]): Promise<void> {
+async function scanDir(
+  root: string,
+  dir: string,
+  findings: SecretFinding[],
+  log: (msg: string) => void,
+): Promise<void> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
     if (entry.name === ".git") continue;
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      await scanDir(root, fullPath, findings);
+      await scanDir(root, fullPath, findings, log);
     } else if (entry.isFile()) {
       await scanFile(root, fullPath, findings);
     }

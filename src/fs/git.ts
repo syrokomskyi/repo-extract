@@ -19,21 +19,25 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { execFileSync } from "node:child_process";
 import type { GitConfig } from "../types.js";
+import type { Logger } from "../log.js";
 import { GitOperationError } from "../errors.js";
 
 export async function commitExport(
   dest: string,
   commitMessage: string,
   gitConfig?: GitConfig,
+  logger?: Logger,
 ): Promise<{ committed: boolean; pushed: boolean }> {
-  console.log("");
-  console.log("Committing changes in destination repository...");
+  const log = logger?.log ?? console.log;
+  const error = logger?.error ?? console.error;
+  log("");
+  log("Committing changes in destination repository...");
   let committed = false;
   let pushed = false;
   try {
     const gitDir = path.join(dest, ".git");
     if (!existsSync(gitDir)) {
-      console.log("  initializing git repository...");
+      log("  initializing git repository...");
       try {
         execFileSync("git", ["init", "-b", "main"], { cwd: dest, stdio: "pipe" });
       } catch (err) {
@@ -49,7 +53,7 @@ export async function commitExport(
         .trim();
       if (branch && branch !== "main") {
         execFileSync("git", ["branch", "-m", "main"], { cwd: dest, stdio: "pipe" });
-        console.log(`  renamed branch: ${branch} → main`);
+        log(`  renamed branch: ${branch} → main`);
       }
     }
 
@@ -66,14 +70,14 @@ export async function commitExport(
             cwd: dest,
             stdio: "pipe",
           });
-          console.log(`  updated origin remote: ${gitConfig.remote}`);
+          log(`  updated origin remote: ${gitConfig.remote}`);
         }
       } catch {
         execFileSync("git", ["remote", "add", "origin", gitConfig.remote], {
           cwd: dest,
           stdio: "pipe",
         });
-        console.log(`  added origin remote: ${gitConfig.remote}`);
+        log(`  added origin remote: ${gitConfig.remote}`);
       }
     }
 
@@ -83,14 +87,14 @@ export async function commitExport(
       .trim();
     if (status) {
       execFileSync("git", ["commit", "-m", commitMessage], { cwd: dest, stdio: "inherit" });
-      console.log(`  committed: ${commitMessage}`);
+      log(`  committed: ${commitMessage}`);
       committed = true;
     } else {
-      console.log("  nothing to commit");
+      log("  nothing to commit");
     }
 
     if (gitConfig?.remote && gitConfig.autoPush) {
-      console.log("Pushing to origin...");
+      log("Pushing to origin...");
       try {
         const branch = execFileSync("git", ["branch", "--show-current"], {
           cwd: dest,
@@ -99,30 +103,30 @@ export async function commitExport(
           .toString()
           .trim();
         if (!branch) {
-          console.log("  skipped (no branch to push)");
+          log("  skipped (no branch to push)");
           return { committed, pushed };
         }
         try {
           execFileSync("git", ["push", "-u", "origin", branch], { cwd: dest, stdio: "inherit" });
-          console.log(`  pushed to origin/${branch}`);
+          log(`  pushed to origin/${branch}`);
           pushed = true;
         } catch {
-          console.log("  regular push rejected, retrying with --force...");
+          log("  regular push rejected, retrying with --force...");
           execFileSync("git", ["push", "-u", "--force", "origin", branch], {
             cwd: dest,
             stdio: "inherit",
           });
-          console.log(`  force-pushed to origin/${branch}`);
+          log(`  force-pushed to origin/${branch}`);
           pushed = true;
         }
       } catch (pushErr) {
-        console.error("  push failed:", pushErr instanceof Error ? pushErr.message : pushErr);
-        console.error("  commit is saved locally — push manually when SSH is available");
+        error(`  push failed: ${pushErr instanceof Error ? pushErr.message : pushErr}`);
+        error("  commit is saved locally — push manually when SSH is available");
       }
     }
   } catch (err) {
     if (err instanceof GitOperationError) throw err;
-    console.log("  git commit skipped (not a git repository or no changes)", err);
+    log("  git commit skipped (not a git repository or no changes)");
   }
   return { committed, pushed };
 }
@@ -144,15 +148,17 @@ export async function transferGitHistory(
   root: string,
   dest: string,
   pathPrefixes: string[],
+  logger?: Logger,
 ): Promise<boolean> {
+  const log = logger?.log ?? console.log;
   try {
     execFileSync("git", ["rev-parse", "--git-dir"], { cwd: root, stdio: "pipe" });
   } catch {
-    console.log("  source is not a git repository, skipping history transfer");
+    log("  source is not a git repository, skipping history transfer");
     return false;
   }
 
-  console.log(`Transferring git history for paths: ${pathPrefixes.join(", ")}...`);
+  log(`Transferring git history for paths: ${pathPrefixes.join(", ")}...`);
 
   if (process.platform === "win32" && pathPrefixes.length > 1) {
     throw new Error(
@@ -236,11 +242,11 @@ export async function transferGitHistory(
     }
     await cp(path.join(tmpDir, ".git"), destGit, { recursive: true });
 
-    console.log("  git history transferred");
+    log("  git history transferred");
     return true;
   } catch (err) {
-    console.log("  git history transfer failed, continuing with fresh repo");
-    console.log(`  ${(err instanceof Error ? err.message : String(err)).slice(0, 200)}`);
+    log("  git history transfer failed, continuing with fresh repo");
+    log(`  ${(err instanceof Error ? err.message : String(err)).slice(0, 200)}`);
     return false;
   } finally {
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {});

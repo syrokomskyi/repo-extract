@@ -13,8 +13,9 @@
 import { existsSync } from "node:fs";
 import * as path from "node:path";
 import type { PackageManager } from "./types.js";
+import type { Logger } from "./log.js";
 
-export function detectPackageManager(root: string): PackageManager {
+export function detectPackageManager(root: string, logger?: Logger): PackageManager {
   const lockfiles: { file: string; pm: PackageManager }[] = [
     { file: "pnpm-lock.yaml", pm: "pnpm" },
     { file: "yarn.lock", pm: "yarn" },
@@ -29,7 +30,7 @@ export function detectPackageManager(root: string): PackageManager {
   }
 
   if (found.length > 1) {
-    console.warn(
+    (logger?.log ?? console.warn)(
       `Warning: multiple lockfiles found in ${root}, using ${found[0]} (priority: pnpm > yarn > npm)`,
     );
   }

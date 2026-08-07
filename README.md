@@ -1,6 +1,6 @@
 # @warpgogol/repo-extract
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) [![CI](https://img.shields.io/github/actions/workflow/status/syrokomskyi/repo-extract/ci.yml?logo=github-actions&logoColor=white)](https://github.com/syrokomskyi/repo-extract/actions) [![npm](https://img.shields.io/npm/v/@warpgogol/repo-extract?logo=npm&logoColor=white)](https://www.npmjs.com/package/@warpgogol/repo-extract)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) [![CI](https://img.shields.io/github/actions/workflow/status/syrokomskyi/repo-extract/ci.yml?logo=github-actions&logoColor=white)](https://github.com/syrokomskyi/repo-extract/actions) [![npm](https://img.shields.io/npm/v/@warpgogol/repo-extract?logo=npm&logoColor=white)](https://www.npmjs.com/package/@warpgogol/repo-extract) [![Issues](https://img.shields.io/github/issues/syrokomskyi/repo-extract?logo=github&logoColor=white)](https://github.com/syrokomskyi/repo-extract/issues)
 
 Extract apps and packages from a TurboRepo monorepo into standalone public repositories.
 

@@ -24,6 +24,11 @@ ignoreDirs:
   - spec
   - .agents
 
+extraGitignore:
+  - .output
+  - .debug
+  - .debug-public
+
 postProcess:
   - action: delete
     path: AGENTS.md

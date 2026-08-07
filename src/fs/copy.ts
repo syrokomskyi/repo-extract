@@ -37,6 +37,7 @@ const IGNORE_FILES = new Set([
   "pnpm-lock.yaml",
   "package-lock.json",
   "yarn.lock",
+  "changelog.config.yaml",
 ]);
 
 const MONOREPO_CONFIG_FILES = [
@@ -70,7 +71,10 @@ export function isIgnored(name: string, extraIgnoreDirs?: string[]): boolean {
 }
 
 export function isKeyMaterial(relPath: string, excludePathSegments?: string[]): boolean {
-  const segments = excludePathSegments ?? [".input" + path.sep + "signing-key"];
+  const segments = excludePathSegments ?? [
+    ".input" + path.sep + "signing-key",
+    ".input" + path.sep + "batches",
+  ];
   return segments.some((seg) => relPath.includes(seg));
 }
 
@@ -124,8 +128,6 @@ export async function copyFiltered(
     const name = entry.name;
     const relPath = subDir ? `${subDir}${path.sep}${name}` : name;
 
-    if (relPath.includes(".input" + path.sep + "batches")) continue;
-
     if (
       isIgnored(name, extraIgnoreDirs) ||
       isKeyMaterial(relPath, excludePathSegments) ||
@@ -162,7 +164,7 @@ export async function copyStandalonePackage(
   excludeExtensions?: string[],
 ): Promise<number> {
   const srcDir = path.join(srcRoot, packageDir);
-  const skipNames = new Set(["node_modules", ".turbo", "changelog.config.yaml"]);
+  const skipNames = new Set(["node_modules", ".turbo"]);
   if (ignoreDirs) {
     for (const d of ignoreDirs) skipNames.add(d);
   }

@@ -40,6 +40,7 @@ import {
   removeDest,
 } from "./fs/copy.js";
 import {
+  buildGitignore,
   cleanStrayArtifacts,
   findAppTsconfigs,
   findPackageJsonFiles,
@@ -442,18 +443,7 @@ async function exportStandalonePackage(
   }
 
   // 4. Write .gitignore
-  const gitignoreContent = [
-    "node_modules",
-    "dist",
-    "*.tsbuildinfo",
-    ".env",
-    ".env.*",
-    "!.env.example",
-    ".turbo",
-    ".DS_Store",
-    "Thumbs.db",
-    "",
-  ].join("\n");
+  const gitignoreContent = buildGitignore(config.extraGitignore, config);
   await writeFile(path.join(dest, ".gitignore"), gitignoreContent);
   logger.log("  wrote .gitignore");
 

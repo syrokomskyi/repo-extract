@@ -63,23 +63,6 @@ export async function transformPackageJson(
     }
   }
 
-  if (relPath.includes("dashboard") && pkg.scripts) {
-    if (pkg.scripts.build && pkg.scripts.build.includes("export:data")) {
-      pkg.scripts.build = "astro build";
-      changed = true;
-    }
-    if (pkg.scripts.dev && pkg.scripts.dev.includes("export:data")) {
-      pkg.scripts.dev = "astro dev";
-      changed = true;
-    }
-    for (const key of ["changelog", "changelog:init"]) {
-      if (pkg.scripts[key]) {
-        delete pkg.scripts[key];
-        changed = true;
-      }
-    }
-  }
-
   for (const depField of ["dependencies", "devDependencies", "peerDependencies"]) {
     if (pkg[depField]) {
       for (const key of Object.keys(pkg[depField])) {
@@ -282,9 +265,8 @@ export function buildGitignore(extraLines: string[] = [], config?: ExtractConfig
   ];
 
   if (mode === "extended") {
-    const extended = [...base.slice(0, 6), ".output", ".debug", ".debug-public", ...base.slice(6)];
     const extra = extraLines.length > 0 ? ["", ...extraLines] : [];
-    return [...extended, ...extra].join("\n");
+    return [...base, ...extra].join("\n");
   }
 
   const extra = extraLines.length > 0 ? ["", ...extraLines] : [];

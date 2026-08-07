@@ -245,15 +245,29 @@ describe("buildGitignore", () => {
     expect(content).toContain("dist");
   });
 
-  it("extended mode includes extra debug patterns", async () => {
+  it("extended mode includes extraGitignore lines", async () => {
+    const { buildGitignore } = await import("../src/fs/transform.js");
+    const extendedConfig: ExtractConfig = {
+      ...baseConfig,
+      gitignoreMode: "extended",
+    };
+    const content = buildGitignore([".output", ".debug", ".debug-public"], extendedConfig);
+    expect(content).toContain(".output");
+    expect(content).toContain(".debug");
+    expect(content).toContain(".debug-public");
+  });
+
+  it("extended mode without extraGitignore has only org-neutral patterns", async () => {
     const { buildGitignore } = await import("../src/fs/transform.js");
     const extendedConfig: ExtractConfig = {
       ...baseConfig,
       gitignoreMode: "extended",
     };
     const content = buildGitignore([], extendedConfig);
-    expect(content).toContain(".output");
-    expect(content).toContain(".debug");
+    expect(content).toContain("node_modules");
+    expect(content).toContain("dist");
+    expect(content).not.toContain(".output");
+    expect(content).not.toContain(".debug");
   });
 });
 

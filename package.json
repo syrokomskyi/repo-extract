@@ -1,6 +1,6 @@
 {
   "name": "@warpgogol/repo-extract",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Extract apps and packages from a TurboRepo monorepo into standalone public repositories",
   "license": "Apache-2.0",
   "author": "Andrii Syrokomskyi <andrii@syrokomskyi.com> (https://syrokomskyi.com)",
@@ -12,7 +12,15 @@
   "bugs": {
     "url": "https://github.com/syrokomskyi/repo-extract/issues"
   },
-  "keywords": ["monorepo", "turborepo", "extract", "export", "standalone", "publish", "automation"],
+  "keywords": [
+    "monorepo",
+    "turborepo",
+    "extract",
+    "export",
+    "standalone",
+    "publish",
+    "automation"
+  ],
   "type": "module",
   "bin": {
     "repo-extract": "dist/cli.js"
@@ -34,7 +42,10 @@
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist", "!**/*.tsbuildinfo"],
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "pnpm exec eslint src --ext .ts",

@@ -54,11 +54,21 @@ const PostProcessRuleSchema = z.discriminatedUnion("action", [
   DeleteRuleSchema,
 ]);
 
+const CloudflarePagesDeploySchema = z.object({
+  provider: z.literal("cloudflare-pages"),
+  projectName: z.string().min(1),
+  buildCommand: z.string().min(1),
+  outputDir: z.string().min(1),
+  apiTokenSecret: z.string().default("CLOUDFLARE_API_TOKEN"),
+  accountIdSecret: z.string().optional(),
+});
+
 const CiConfigSchema = z.object({
   provider: z.enum(["github-actions", "none"]).default("github-actions"),
   packageManager: z.enum(["pnpm", "npm", "yarn"]).optional(),
   publish: z.boolean().default(true),
   nodeVersion: z.number().default(22),
+  deploy: CloudflarePagesDeploySchema.optional(),
 });
 
 const ExtractConfigSchema = z.object({

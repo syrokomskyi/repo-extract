@@ -553,6 +553,40 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
     );
   }
 
+  if (ci?.deploy?.provider === "cloudflare-pages") {
+    const d = ci.deploy;
+    const envLines = [
+      "          " + d.apiTokenSecret + ": ${{ secrets." + d.apiTokenSecret + " }}",
+    ];
+    if (d.accountIdSecret) {
+      envLines.push(
+        "          " + d.accountIdSecret + ": ${{ secrets." + d.accountIdSecret + " }}",
+      );
+    }
+    lines.push(
+      "",
+      "  deploy:",
+      "    needs: ci",
+      "    if: github.event_name == 'push'",
+      "    runs-on: ubuntu-latest",
+      "    timeout-minutes: 15",
+      "    permissions:",
+      "      contents: read",
+      "    steps:",
+      "      - uses: actions/checkout@v5",
+      ...pnpmSetup,
+      "      - uses: actions/setup-node@v5",
+      "        with:",
+      `          node-version: ${nodeVersion}`,
+      `          cache: ${cacheKey}`,
+      `      - run: ${installCmd}`,
+      `      - run: ${d.buildCommand}`,
+      `      - run: npx wrangler pages deploy ${d.outputDir} --project-name=${d.projectName}`,
+      "        env:",
+      ...envLines,
+    );
+  }
+
   lines.push("");
   return lines.join("\n");
 }

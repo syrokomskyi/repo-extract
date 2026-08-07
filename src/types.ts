@@ -19,11 +19,23 @@ export type PackageManager = "pnpm" | "npm" | "yarn";
 
 export type VersionBump = "patch" | "minor" | "major";
 
+export interface CloudflarePagesDeploy {
+  provider: "cloudflare-pages";
+  projectName: string;
+  buildCommand: string;
+  outputDir: string;
+  apiTokenSecret: string;
+  accountIdSecret?: string;
+}
+
+export type DeployConfig = CloudflarePagesDeploy;
+
 export interface CiConfig {
   provider: "github-actions" | "none";
   packageManager?: PackageManager;
   publish: boolean;
   nodeVersion: number;
+  deploy?: DeployConfig;
 }
 
 export type PostProcessAction = "copy" | "patch" | "delete";
@@ -124,7 +136,6 @@ export type ExtractProgressEvent =
   | { phase: "transforming"; file: string }
   | { phase: "postProcess"; rule: PostProcessRule }
   | { phase: "scanning"; dest: string }
-  | { phase: "gitHistory"; prefixes: string[] }
   | { phase: "gitCommit"; message: string }
   | { phase: "gitPush"; remote: string }
   | { phase: "complete"; result: ExtractResult }

@@ -110,6 +110,53 @@ describe("generateCiWorkflow", () => {
     })!;
     expect(yaml).toContain("node-version: 20");
   });
+
+  it("generates cloudflare-pages deploy job when deploy is configured", () => {
+    const yaml = generateCiWorkflow("pnpm", {
+      provider: "github-actions",
+      publish: false,
+      nodeVersion: 22,
+      deploy: {
+        provider: "cloudflare-pages",
+        projectName: "hdri",
+        buildCommand: "pnpm --filter @syrokomskyi/dashboard run build",
+        outputDir: "apps/hdri/dashboard/dist",
+        apiTokenSecret: "CLOUDFLARE_API_TOKEN",
+      },
+    })!;
+    expect(yaml).toContain("  deploy:");
+    expect(yaml).toContain("needs: ci");
+    expect(yaml).toContain("if: github.event_name == 'push'");
+    expect(yaml).toContain("wrangler pages deploy apps/hdri/dashboard/dist --project-name=hdri");
+    expect(yaml).toContain("          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}");
+    expect(yaml).not.toContain("npm publish");
+  });
+
+  it("includes accountId env when accountIdSecret is set", () => {
+    const yaml = generateCiWorkflow("pnpm", {
+      provider: "github-actions",
+      publish: false,
+      nodeVersion: 22,
+      deploy: {
+        provider: "cloudflare-pages",
+        projectName: "hdri",
+        buildCommand: "pnpm run build",
+        outputDir: "dist",
+        apiTokenSecret: "CLOUDFLARE_API_TOKEN",
+        accountIdSecret: "CLOUDFLARE_ACCOUNT_ID",
+      },
+    })!;
+    expect(yaml).toContain("          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
+  });
+
+  it("omits deploy job when deploy is not configured", () => {
+    const yaml = generateCiWorkflow("pnpm", {
+      provider: "github-actions",
+      publish: false,
+      nodeVersion: 22,
+    })!;
+    expect(yaml).not.toContain("  deploy:");
+  });
 });
 
 describe("buildRootPackageJson", () => {

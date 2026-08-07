@@ -16,7 +16,7 @@
 </CHANGE_SUMMARY>
 */
 
-import { stat, cp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { stat, cp, mkdir, writeFile, readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
@@ -477,12 +477,16 @@ async function exportStandalonePackage(
     );
   }
 
-  // 4e. Remove auto-generated pnpm-workspace.yaml (not needed in standalone)
+  // 4e. Clean up auto-generated pnpm-workspace.yaml (resolve interactive prompts)
   if (pm === "pnpm") {
+    const wsPath = path.join(dest, "pnpm-workspace.yaml");
     try {
-      await rm(path.join(dest, "pnpm-workspace.yaml"), { force: true });
+      const wsContent = await readFile(wsPath, "utf-8");
+      const cleaned = wsContent.replace(/set this to true or false/g, "true");
+      await writeFile(wsPath, cleaned);
+      logger.log("  cleaned pnpm-workspace.yaml (resolved allowBuilds prompts)");
     } catch {
-      /* no-op */
+      /* no pnpm-workspace.yaml, no-op */
     }
   }
 

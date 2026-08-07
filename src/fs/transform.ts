@@ -298,10 +298,12 @@ function rootScripts(pm: PackageManager): Record<string, string> {
     };
   }
   return {
-    build: 'pnpm --recursive --filter "./apps/**" exec pnpm run build',
-    typecheck: 'pnpm --recursive --filter "./apps/**" exec pnpm run typecheck',
-    lint: 'pnpm --recursive --filter "./apps/**" exec pnpm run lint',
-    test: 'pnpm --recursive --filter "./apps/**" exec pnpm run --if-present test',
+    build:
+      'pnpm --recursive --filter "./apps/**" --filter "./packages/**" exec pnpm run --if-present build',
+    typecheck:
+      'pnpm --recursive --filter "./apps/**" --filter "./packages/**" exec pnpm run --if-present typecheck',
+    lint: 'pnpm --recursive --filter "./apps/**" --filter "./packages/**" exec pnpm run --if-present lint',
+    test: 'pnpm --recursive --filter "./apps/**" --filter "./packages/**" exec pnpm run --if-present test',
   };
 }
 

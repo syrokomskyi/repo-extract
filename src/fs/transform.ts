@@ -8,6 +8,7 @@
 <CHANGE_SUMMARY>
   <item>Ported transformPackageJson, fixPackageTsconfigs, fixAppTsconfigs, regenerateTsconfigBase, generateRootFiles from scripts/export-clients-helpers.ts for RFC-0070.</item>
   <item>ADR-0010: added lint step, npm publish --provenance, and id-token: write to generateCiWorkflow()</item>
+  <item>RFC-0071: Replaced hardcoded org-specific values with config-driven options (stripScopes, preservePackages, rootPackageName, customConditions, onlyBuiltDependencies, packageManager, gitignoreMode).</item>
 </CHANGE_SUMMARY>
 */
 
@@ -17,7 +18,11 @@ import type { Dirent } from "node:fs";
 import type { ExtractConfig } from "../types.js";
 import { isIgnored } from "./copy.js";
 
-export async function transformPackageJson(dest: string, relPath: string): Promise<void> {
+export async function transformPackageJson(
+  dest: string,
+  relPath: string,
+  config: ExtractConfig,
+): Promise<void> {
   const fullPath = path.join(dest, relPath);
   let raw: string;
   try {
@@ -29,9 +34,14 @@ export async function transformPackageJson(dest: string, relPath: string): Promi
   const pkg = JSON.parse(raw);
   let changed = false;
 
+  const stripScopes = config.stripScopes ?? config.workspacePrefixes ?? [];
+  const preservePackages = config.preservePackages ?? [];
+
   if (pkg.devDependencies) {
     for (const key of Object.keys(pkg.devDependencies)) {
-      if (key.startsWith("@syrokomskyi/compass-")) {
+      const shouldStrip = stripScopes.some((scope) => key.startsWith(scope));
+      const shouldPreserve = preservePackages.includes(key);
+      if (shouldStrip && !shouldPreserve) {
         delete pkg.devDependencies[key];
         changed = true;
       }
@@ -71,11 +81,11 @@ export async function transformPackageJson(dest: string, relPath: string): Promi
   for (const depField of ["dependencies", "devDependencies", "peerDependencies"]) {
     if (pkg[depField]) {
       for (const key of Object.keys(pkg[depField])) {
-        if (key.startsWith("@wgogol/") || key.startsWith("@warpgogol/")) {
-          if (key !== "@warpgogol/repo-extract") {
-            delete pkg[depField][key];
-            changed = true;
-          }
+        const shouldStrip = stripScopes.some((scope) => key.startsWith(scope));
+        const shouldPreserve = preservePackages.includes(key);
+        if (shouldStrip && !shouldPreserve) {
+          delete pkg[depField][key];
+          changed = true;
         }
       }
       if (Object.keys(pkg[depField]).length === 0) {
@@ -164,28 +174,31 @@ export async function fixAppTsconfigs(dest: string, appTsconfigPaths: string[]):
   }
 }
 
-export async function regenerateTsconfigBase(dest: string): Promise<void> {
-  const baseTsconfig = {
-    compilerOptions: {
-      composite: true,
-      declarationMap: true,
-      emitDeclarationOnly: true,
-      importHelpers: true,
-      isolatedModules: true,
-      lib: ["es2022"],
-      module: "nodenext",
-      moduleResolution: "nodenext",
-      noEmitOnError: true,
-      noFallthroughCasesInSwitch: true,
-      noImplicitOverride: true,
-      noImplicitReturns: true,
-      noUnusedLocals: true,
-      skipLibCheck: true,
-      strict: true,
-      target: "es2022",
-      customConditions: ["@syrokomskyi/source"],
-    },
+export async function regenerateTsconfigBase(dest: string, config: ExtractConfig): Promise<void> {
+  const compilerOptions: Record<string, unknown> = {
+    composite: true,
+    declarationMap: true,
+    emitDeclarationOnly: true,
+    importHelpers: true,
+    isolatedModules: true,
+    lib: ["es2022"],
+    module: "nodenext",
+    moduleResolution: "nodenext",
+    noEmitOnError: true,
+    noFallthroughCasesInSwitch: true,
+    noImplicitOverride: true,
+    noImplicitReturns: true,
+    noUnusedLocals: true,
+    skipLibCheck: true,
+    strict: true,
+    target: "es2022",
   };
+
+  if (config.customConditions && config.customConditions.length > 0) {
+    compilerOptions.customConditions = config.customConditions;
+  }
+
+  const baseTsconfig = { compilerOptions };
   await writeFile(
     path.join(dest, "tsconfig.base.json"),
     JSON.stringify(baseTsconfig, null, 2) + "\n",
@@ -245,15 +258,13 @@ async function walkForPackageJson(dir: string, relDir: string, results: string[]
   }
 }
 
-export function buildGitignore(extraLines: string[] = []): string {
+export function buildGitignore(extraLines: string[] = [], config?: ExtractConfig): string {
+  const mode = config?.gitignoreMode ?? "extended";
   const base = [
     ".env",
     ".env.*",
     "",
     "# Build outputs",
-    ".output",
-    ".debug",
-    ".debug-public",
     "dist",
     "node_modules",
     "",
@@ -263,26 +274,24 @@ export function buildGitignore(extraLines: string[] = []): string {
     "# TypeScript",
     "*.tsbuildinfo",
     "",
-    "# Data files",
-    "**/*.db",
-    ".cadence-state.json",
-    "archive/",
-    ".pipeline-data/",
-    "",
-    "# Astro",
-    ".astro",
-    "",
     "# OS files",
     ".DS_Store",
     "Thumbs.db",
   ];
+
+  if (mode === "extended") {
+    const extended = [...base.slice(0, 6), ".output", ".debug", ".debug-public", ...base.slice(6)];
+    const extra = extraLines.length > 0 ? ["", ...extraLines] : [];
+    return [...extended, ...extra].join("\n");
+  }
+
   const extra = extraLines.length > 0 ? ["", ...extraLines] : [];
   return [...base, ...extra].join("\n");
 }
 
-export function buildRootPackageJson(destName: string): object {
+export function buildRootPackageJson(destName: string, config: ExtractConfig): object {
   return {
-    name: `@syrokomskyi/clients-${destName}`,
+    name: config.rootPackageName ?? `exported-${destName}`,
     private: true,
     scripts: {
       build: 'pnpm --recursive --filter "./apps/**" exec pnpm run build',
@@ -298,7 +307,7 @@ export function buildRootPackageJson(destName: string): object {
       typescript: "~6.0.3",
       "typescript-eslint": "^8.64.0",
     },
-    packageManager: "pnpm@10.33.0",
+    ...(config.packageManager ? { packageManager: config.packageManager } : {}),
   };
 }
 
@@ -311,7 +320,7 @@ export async function generateRootFiles(
 ): Promise<void> {
   await writeFile(
     path.join(dest, "package.json"),
-    JSON.stringify(buildRootPackageJson(config.destName), null, 2) + "\n",
+    JSON.stringify(buildRootPackageJson(config.destName, config), null, 2) + "\n",
   );
 
   const workspaceEntries = new Set<string>();
@@ -330,22 +339,25 @@ export async function generateRootFiles(
     }
   }
 
-  const workspaceYaml = [
+  const workspaceYamlLines = [
     "packages:",
     ...Array.from(workspaceEntries)
       .sort()
       .map((e) => `  - ${e}`),
     "",
-    "onlyBuiltDependencies:",
-    "  - '@duckdb/node-api'",
-    "  - '@swc/core'",
-    "  - better-sqlite3",
-    "  - esbuild",
-    "",
-  ].join("\n");
-  await writeFile(path.join(dest, "pnpm-workspace.yaml"), workspaceYaml);
+  ];
 
-  await writeFile(path.join(dest, ".gitignore"), buildGitignore(config.extraGitignore));
+  if (config.onlyBuiltDependencies && config.onlyBuiltDependencies.length > 0) {
+    workspaceYamlLines.push("onlyBuiltDependencies:");
+    for (const dep of config.onlyBuiltDependencies) {
+      workspaceYamlLines.push(`  - '${dep}'`);
+    }
+    workspaceYamlLines.push("");
+  }
+
+  await writeFile(path.join(dest, "pnpm-workspace.yaml"), workspaceYamlLines.join("\n"));
+
+  await writeFile(path.join(dest, ".gitignore"), buildGitignore(config.extraGitignore, config));
 
   const appRefs: { path: string }[] = [];
   for (const appDir of appDirs) {
@@ -437,7 +449,7 @@ export function generateCiWorkflow(): string {
   ].join("\n");
 }
 
-export async function fixStandalonePackageJson(dest: string): Promise<void> {
+export async function fixStandalonePackageJson(dest: string, config: ExtractConfig): Promise<void> {
   const pkgPath = path.join(dest, "package.json");
   let raw: string;
   try {
@@ -448,6 +460,9 @@ export async function fixStandalonePackageJson(dest: string): Promise<void> {
 
   const pkg = JSON.parse(raw);
   let changed = false;
+
+  const stripScopes = config.stripScopes ?? config.workspacePrefixes ?? [];
+  const preservePackages = config.preservePackages ?? [];
 
   if (pkg.scripts?.test && typeof pkg.scripts.test === "string") {
     if (
@@ -467,15 +482,16 @@ export async function fixStandalonePackageJson(dest: string): Promise<void> {
             pkg[depField][key] = "*";
             changed = true;
           }
-        } else if (
-          key.startsWith("@wgogol/") ||
-          (key.startsWith("@warpgogol/") && key !== "@warpgogol/repo-extract")
-        ) {
-          delete pkg[depField][key];
-          changed = true;
-        } else if (pkg[depField][key] === "workspace:*") {
-          pkg[depField][key] = "*";
-          changed = true;
+        } else {
+          const shouldStrip = stripScopes.some((scope) => key.startsWith(scope));
+          const shouldPreserve = preservePackages.includes(key);
+          if (shouldStrip && !shouldPreserve) {
+            delete pkg[depField][key];
+            changed = true;
+          } else if (pkg[depField][key] === "workspace:*") {
+            pkg[depField][key] = "*";
+            changed = true;
+          }
         }
       }
       if (Object.keys(pkg[depField]).length === 0) {
@@ -484,8 +500,8 @@ export async function fixStandalonePackageJson(dest: string): Promise<void> {
     }
   }
 
-  if (!pkg.packageManager) {
-    pkg.packageManager = "pnpm@10.33.0";
+  if (!pkg.packageManager && config.packageManager) {
+    pkg.packageManager = config.packageManager;
     changed = true;
   }
 

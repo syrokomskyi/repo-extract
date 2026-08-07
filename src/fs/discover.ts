@@ -7,6 +7,7 @@
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>Ported discoverPackageDeps from scripts/export-clients-helpers.ts for RFC-0070. Supports both @syrokomskyi/ and @warpgogol/ prefixes.</item>
+  <item>RFC-0071: Default workspacePrefixes changed from ["@syrokomskyi/", "@warpgogol/"] to [] (empty). Callers must pass explicit prefixes.
 </CHANGE_SUMMARY>
 */
 
@@ -18,7 +19,7 @@ import { isIgnored } from "./copy.js";
 export async function discoverPackageDeps(
   root: string,
   appDirs: string[],
-  workspacePrefixes: string[] = ["@syrokomskyi/", "@warpgogol/"],
+  workspacePrefixes: string[] = [],
 ): Promise<string[]> {
   const visited = new Set<string>();
   const result = new Set<string>();

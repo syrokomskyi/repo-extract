@@ -7,6 +7,7 @@
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>Initial extractProject orchestrator for RFC-0070. Ports main() and exportStandalonePackage() from scripts/export-clients.ts.</item>
+  <item>RFC-0071: Replaced hardcoded destBase, AI files, copyDirs defaults with config-driven options. Pass config to transform functions.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -49,7 +50,8 @@ export async function extractProject(
   options: ExtractOptions = {},
 ): Promise<void> {
   const root = process.cwd();
-  const destBase = config.projectDir.startsWith("packages/") ? "packages" : "clients";
+  const destBase =
+    config.destBase ?? (config.projectDir.startsWith("packages/") ? "packages" : "exports");
   const dest = options.dest ?? path.resolve(root, "..", destBase, config.destName);
 
   console.log(`Exporting ${config.destName} to ${destBase}...`);
@@ -123,7 +125,7 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
 
   // 3. Copy AI ecosystem files
   console.log("Copying AI agent ecosystem...");
-  const aiFiles = ["AGENTS.md", "apps/AGENTS.md", "packages/AGENTS.md"];
+  const aiFiles = config.aiEcosystemFiles ?? [];
   for (const f of aiFiles) {
     const src = path.join(root, f);
     const destPath = path.join(dest, f);
@@ -136,7 +138,7 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
     }
   }
 
-  for (const copyDir of config.copyDirs ?? [".agents", ".github"]) {
+  for (const copyDir of config.copyDirs ?? []) {
     const src = path.join(root, copyDir);
     const destPath = path.join(dest, copyDir);
     try {
@@ -213,7 +215,7 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
   }
 
   // 10. Regenerate tsconfig.base.json
-  await regenerateTsconfigBase(dest);
+  await regenerateTsconfigBase(dest, config);
 
   // 11. Sample batch data (if configured)
   if (config.batchDataDir) {
@@ -236,7 +238,7 @@ async function exportMonorepo(root: string, dest: string, config: ExtractConfig)
   const allDirs = [...config.appDirs, ...packageDirs];
   const pkgJsonFiles = await findPackageJsonFiles(dest, allDirs);
   for (const rel of pkgJsonFiles) {
-    await transformPackageJson(dest, rel);
+    await transformPackageJson(dest, rel, config);
   }
 
   // 13. Generate lockfile
@@ -310,7 +312,7 @@ async function exportStandalonePackage(
 
   // 2. Copy package contents
   console.log("Copying standalone package...");
-  const fileCount = await copyStandalonePackage(root, dest, config.projectDir);
+  const fileCount = await copyStandalonePackage(root, dest, config.projectDir, config.ignoreDirs);
   console.log(`  copied ${fileCount} files`);
 
   // 3. Rewrite tsconfig.json to be self-contained
@@ -358,7 +360,7 @@ async function exportStandalonePackage(
 
   // 4b. Fix standalone package.json (test script, workspace deps)
   console.log("Fixing standalone package.json...");
-  await fixStandalonePackageJson(dest);
+  await fixStandalonePackageJson(dest, config);
 
   // 4c. Fix vitest.config.ts (relative test paths)
   console.log("Fixing vitest.config.ts...");

@@ -8,6 +8,7 @@
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>Ported copyFiltered, copyStandalonePackage, removeDest from scripts/export-clients-helpers.ts for RFC-0070.</item>
+  <item>RFC-0071: Split IGNORE_DIRS into BASE_IGNORE_DIRS (org-neutral) and config-driven ignoreDirs. MONOREPO_CONFIG_FILES kept as auto-detect candidate list.
 </CHANGE_SUMMARY>
 */
 
@@ -16,16 +17,13 @@ import * as fsSync from "node:fs";
 import * as path from "node:path";
 import type { Dirent } from "node:fs";
 
-const IGNORE_DIRS = new Set([
+const BASE_IGNORE_DIRS = new Set([
   "node_modules",
   ".turbo",
-  ".output",
-  ".debug",
-  ".debug-public",
   "dist",
-  ".astro",
-  ".agents",
-  "spec",
+  ".env",
+  ".DS_Store",
+  "Thumbs.db",
 ]);
 
 const IGNORE_FILES = new Set([
@@ -50,7 +48,7 @@ const MONOREPO_CONFIG_FILES = [
 ];
 
 export function isIgnored(name: string, extraIgnoreDirs?: string[]): boolean {
-  if (IGNORE_DIRS.has(name) || IGNORE_FILES.has(name) || name.endsWith(".tsbuildinfo")) {
+  if (BASE_IGNORE_DIRS.has(name) || IGNORE_FILES.has(name) || name.endsWith(".tsbuildinfo")) {
     return true;
   }
   if (extraIgnoreDirs && extraIgnoreDirs.includes(name)) {
@@ -131,16 +129,13 @@ export async function copyStandalonePackage(
   srcRoot: string,
   dest: string,
   packageDir: string,
+  ignoreDirs?: string[],
 ): Promise<number> {
   const srcDir = path.join(srcRoot, packageDir);
-  const skipNames = new Set([
-    "node_modules",
-    ".turbo",
-    ".output",
-    ".debug",
-    ".debug-public",
-    "changelog.config.yaml",
-  ]);
+  const skipNames = new Set(["node_modules", ".turbo", "changelog.config.yaml"]);
+  if (ignoreDirs) {
+    for (const d of ignoreDirs) skipNames.add(d);
+  }
 
   let count = 0;
   await cp(srcDir, dest, {

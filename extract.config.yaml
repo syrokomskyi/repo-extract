@@ -1,9 +1,28 @@
 # extract.config.yaml — repo-extract standalone package export
 # RFC-0070: @warpgogol/repo-extract (dogfooding — export itself)
+# RFC-0071: Explicit org-specific values (no hardcoded defaults)
 
 projectDir: packages/repo-extract
 destName: repo-extract
 standalone: true
+
+workspacePrefixes:
+  - "@syrokomskyi/"
+  - "@warpgogol/"
+stripScopes:
+  - "@syrokomskyi/"
+  - "@warpgogol/"
+  - "@wgogol/"
+preservePackages:
+  - "@warpgogol/repo-extract"
+packageManager: "pnpm@10.33.0"
+ignoreDirs:
+  - .output
+  - .debug
+  - .debug-public
+  - .astro
+  - spec
+  - .agents
 
 postProcess:
   - action: delete

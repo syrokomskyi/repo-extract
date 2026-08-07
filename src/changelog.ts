@@ -57,7 +57,7 @@ export async function tryGenerateChangelog(
     const config = await loadConfig(changelogConfigPath);
     config.git.repoRoot = path.resolve(projectDir, config.git.repoRoot);
     config.output.dir = path.resolve(projectDir, config.output.dir);
-    const result = await generateChangelog(config);
+    const result = await generateChangelog(config, { includeInProgress: true });
     return {
       skipped: result.skipped,
       commitMessage: result.commitMessage,

@@ -507,12 +507,15 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
     `      - run: ${installCmd}`,
   ];
 
-  const buildSteps = [
-    `      - run: ${runPrefix} build`,
+  const buildSteps: string[] = [];
+  if (!ci?.skipBuild) {
+    buildSteps.push(`      - run: ${runPrefix} build`);
+  }
+  buildSteps.push(
     `      - run: ${runPrefix} lint`,
     `      - run: ${runPrefix} typecheck`,
     `      - run: ${testCmd}`,
-  ];
+  );
 
   const lines: string[] = [
     "name: CI",

@@ -70,6 +70,7 @@ const CiConfigSchema = z.object({
   nodeVersion: z.number().default(22),
   deploy: CloudflarePagesDeploySchema.optional(),
   workspaceFilter: z.string().optional(),
+  skipBuild: z.boolean().optional(),
 });
 
 const ExtractConfigSchema = z.object({

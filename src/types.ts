@@ -37,6 +37,7 @@ export interface CiConfig {
   nodeVersion: number;
   deploy?: DeployConfig;
   workspaceFilter?: string;
+  skipBuild?: boolean;
 }
 
 export type PostProcessAction = "copy" | "patch" | "delete";

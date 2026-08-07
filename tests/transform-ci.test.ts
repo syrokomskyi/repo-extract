@@ -157,6 +157,18 @@ describe("generateCiWorkflow", () => {
     })!;
     expect(yaml).not.toContain("  deploy:");
   });
+
+  it("omits build step when skipBuild is true", () => {
+    const yaml = generateCiWorkflow("pnpm", {
+      provider: "github-actions",
+      publish: false,
+      nodeVersion: 22,
+      skipBuild: true,
+    })!;
+    expect(yaml).not.toContain("pnpm run build");
+    expect(yaml).toContain("pnpm run lint");
+    expect(yaml).toContain("pnpm run typecheck");
+  });
 });
 
 describe("buildRootPackageJson", () => {

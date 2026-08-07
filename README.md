@@ -112,6 +112,12 @@ skipSecretScan: true  # disable scanning (not recommended)
 ignoreDirs:
   - .input
   - spec
+excludePathSegments:
+  - .input/signing-key
+  - secrets
+excludeExtensions:
+  - .db
+  - .sqlite
 ```
 
 ### Optional changelog integration

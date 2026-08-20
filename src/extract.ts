@@ -689,20 +689,59 @@ async function generateStubShims(
           if (seen.has(exp.name)) continue;
           seen.add(exp.name);
 
+          const isReserved = [
+            "default",
+            "break",
+            "case",
+            "catch",
+            "class",
+            "const",
+            "continue",
+            "debugger",
+            "delete",
+            "do",
+            "else",
+            "enum",
+            "export",
+            "extends",
+            "false",
+            "finally",
+            "for",
+            "function",
+            "if",
+            "import",
+            "in",
+            "instanceof",
+            "new",
+            "null",
+            "return",
+            "super",
+            "switch",
+            "this",
+            "throw",
+            "true",
+            "try",
+            "typeof",
+            "var",
+            "void",
+            "while",
+            "with",
+          ].includes(exp.name);
+          const safeName = isReserved ? `"${exp.name}"` : exp.name;
           if (exp.kind === "function") {
-            lines.push(`  export function ${exp.name}(...args: any[]): any;`);
+            lines.push(`  export function ${safeName}(...args: any[]): any;`);
           } else if (exp.kind === "const") {
-            lines.push(`  export const ${exp.name}: any;`);
+            lines.push(`  export const ${safeName}: any;`);
           } else if (exp.kind === "class") {
             lines.push(
-              `  export class ${exp.name} { constructor(...args: any[]); }`,
+              `  export class ${safeName} { constructor(...args: any[]); }`,
             );
           } else if (exp.kind === "interface") {
-            lines.push(`  export interface ${exp.name} {}`);
+            lines.push(`  export interface ${safeName} {}`);
           } else if (exp.kind === "type") {
-            lines.push(`  export type ${exp.name} = any;`);
+            lines.push(`  export type ${safeName} = any;`);
           } else if (exp.kind === "enum") {
-            lines.push(`  export enum ${exp.name} {}`);
+            lines.push(`  export enum ${safeName} {}`);
           }
         }
       }
@@ -816,7 +855,8 @@ function parseNamedExportsRecursive(
         s
           .trim()
           .split(/\s+as\s+/)[0]
-          .trim(),
+          .trim()
+          .replace(/^type\s+/, ""),
       )
       .filter(Boolean);
     for (const name of names) {
@@ -874,7 +914,8 @@ function parseNamedExports(content: string): NamedExport[] {
         s
           .trim()
           .split(/\s+as\s+/)[0]
-          .trim(),
+          .trim()
+          .replace(/^type\s+/, ""),
       )
       .filter(Boolean);
     for (const name of names) {

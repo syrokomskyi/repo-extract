@@ -727,6 +727,14 @@ async function generateStubShims(
             "while",
             "with",
           ].includes(exp.name);
+          const isValidIdent = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(exp.name);
+          if (!isValidIdent && !isReserved) {
+            continue;
+          }
+          if (exp.name === "default") {
+            lines.push(`  export default any;`);
+            continue;
+          }
           const safeName = isReserved ? `"${exp.name}"` : exp.name;
           if (exp.kind === "function") {
             lines.push(`  export function ${safeName}(...args: any[]): any;`);

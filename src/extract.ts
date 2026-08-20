@@ -16,8 +16,15 @@
 </CHANGE_SUMMARY>
 */
 
-import { stat, cp, mkdir, writeFile, readFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import {
+  stat,
+  cp,
+  mkdir,
+  writeFile,
+  readFile,
+  readdir,
+} from "node:fs/promises";
+import { readFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import type {
@@ -70,8 +77,10 @@ export async function extractProject(
 ): Promise<ExtractResult> {
   const root = process.cwd();
   const destBase =
-    config.destBase ?? (config.projectDir.startsWith("packages/") ? "packages" : "exports");
-  const dest = options.dest ?? path.resolve(root, "..", destBase, config.destName);
+    config.destBase ??
+    (config.projectDir.startsWith("packages/") ? "packages" : "exports");
+  const dest =
+    options.dest ?? path.resolve(root, "..", destBase, config.destName);
   const logger = createLogger(options.verbose);
   const onProgress = options.onProgress;
 
@@ -93,6 +102,9 @@ export async function extractProject(
     logger.log(`  projectDir: ${config.projectDir}`);
     logger.log(`  destName: ${config.destName}`);
     logger.log(`  standalone: ${config.standalone}`);
+    logger.log(
+      `  stubPackages: ${config.stubPackages?.join(", ") || "(none)"}`,
+    );
     logger.log(`  appDirs: ${config.appDirs.join(", ") || "(none)"}`);
     if (config.postProcess) {
       logger.log(`  postProcess rules: ${config.postProcess.length}`);
@@ -120,7 +132,10 @@ export async function extractProject(
       return await exportMonorepo(root, dest, config, logger, emit);
     }
   } catch (err) {
-    emit({ phase: "error", error: err instanceof Error ? err : new Error(String(err)) });
+    emit({
+      phase: "error",
+      error: err instanceof Error ? err : new Error(String(err)),
+    });
     throw err;
   }
 }
@@ -132,7 +147,8 @@ async function exportMonorepo(
   logger: Logger,
   emit: (event: ExtractProgressEvent) => void,
 ): Promise<ExtractResult> {
-  const pm: PackageManager = config.packageManager ?? detectPackageManager(root, logger);
+  const pm: PackageManager =
+    config.packageManager ?? detectPackageManager(root, logger);
   const projectDir = path.join(root, config.projectDir);
 
   // 0. Bump source version before copy
@@ -158,7 +174,8 @@ async function exportMonorepo(
 
   // 2. Copy monorepo config files
   logger.log("Copying monorepo config files...");
-  const monorepoFiles = config.monorepoConfigFiles ?? getMonorepoConfigFiles(pm);
+  const monorepoFiles =
+    config.monorepoConfigFiles ?? getMonorepoConfigFiles(pm);
   for (const file of monorepoFiles) {
     const src = path.join(root, file);
     const destPath = path.join(dest, file);
@@ -222,11 +239,25 @@ async function exportMonorepo(
   let packageDirs = config.packageDirs;
   if (!packageDirs) {
     logger.log("Auto-discovering package dependencies...");
-    packageDirs = await discoverPackageDeps(root, config.appDirs, config.workspacePrefixes);
-    logger.log(`  found ${packageDirs.length} packages: ${packageDirs.join(", ")}`);
+    packageDirs = await discoverPackageDeps(
+      root,
+      config.appDirs,
+      config.workspacePrefixes,
+    );
+    logger.log(
+      `  found ${packageDirs.length} packages: ${packageDirs.join(", ")}`,
+    );
   }
 
-  await generateRootFiles(dest, root, config, packageDirs, config.appDirs, pm, logger);
+  await generateRootFiles(
+    dest,
+    root,
+    config,
+    packageDirs,
+    config.appDirs,
+    pm,
+    logger,
+  );
 
   // 5. Copy apps with filtering
   logger.log("Copying apps...");
@@ -321,7 +352,9 @@ async function exportMonorepo(
   logger.log(`Generating ${pm} lockfile...`);
   const installBin = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
   const installArgs =
-    pm === "pnpm" ? ["install", "--config.dangerouslyAllowAllBuilds=true"] : ["install"];
+    pm === "pnpm"
+      ? ["install", "--config.dangerouslyAllowAllBuilds=true"]
+      : ["install"];
   try {
     execFileSync(installBin, installArgs, { cwd: dest, stdio: "pipe" });
     logger.log(`  generated ${pm} lockfile`);
@@ -379,7 +412,12 @@ async function exportMonorepo(
 
   // 17. Git commit + push
   emit({ phase: "gitCommit", message: changelogCommitMessage });
-  const gitResult = await commitExport(dest, changelogCommitMessage, config.git, logger);
+  const gitResult = await commitExport(
+    dest,
+    changelogCommitMessage,
+    config.git,
+    logger,
+  );
   if (gitResult.pushed) {
     emit({ phase: "gitPush", remote: config.git?.remote ?? "origin" });
   }
@@ -405,7 +443,8 @@ async function exportStandalonePackage(
   logger: Logger,
   emit: (event: ExtractProgressEvent) => void,
 ): Promise<ExtractResult> {
-  const pm: PackageManager = config.packageManager ?? detectPackageManager(root, logger);
+  const pm: PackageManager =
+    config.packageManager ?? detectPackageManager(root, logger);
   const changelogCommitMessage = `chore(${config.destName}): export ${new Date().toISOString().slice(0, 10)}`;
 
   // 0. Bump source version before copy
@@ -439,9 +478,16 @@ async function exportStandalonePackage(
   try {
     const tsconfig = JSON.parse(await readFile(tsconfigPath, "utf-8"));
     if (tsconfig.extends && tsconfig.extends.includes("../")) {
-      const srcTsconfigPath = path.join(root, config.projectDir, "tsconfig.json");
+      const srcTsconfigPath = path.join(
+        root,
+        config.projectDir,
+        "tsconfig.json",
+      );
       const srcTsconfig = JSON.parse(readFileSync(srcTsconfigPath, "utf-8"));
-      const basePath = path.resolve(path.dirname(srcTsconfigPath), srcTsconfig.extends);
+      const basePath = path.resolve(
+        path.dirname(srcTsconfigPath),
+        srcTsconfig.extends,
+      );
       const baseConfig = JSON.parse(readFileSync(basePath, "utf-8"));
       tsconfig.compilerOptions = {
         ...baseConfig.compilerOptions,
@@ -471,11 +517,19 @@ async function exportStandalonePackage(
   logger.log("Fixing vitest.config.ts...");
   await fixStandaloneVitestConfig(dest, logger);
 
+  // 4c-b. Generate stub shims for unresolvable workspace packages
+  if (config.stubPackages && config.stubPackages.length > 0) {
+    logger.log("Generating stub shims...");
+    await generateStubShims(root, dest, config, logger);
+  }
+
   // 4d. Generate lockfile
   logger.log(`Generating ${pm} lockfile...`);
   const installBin = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
   const installArgs =
-    pm === "pnpm" ? ["install", "--config.dangerouslyAllowAllBuilds=true"] : ["install"];
+    pm === "pnpm"
+      ? ["install", "--config.dangerouslyAllowAllBuilds=true"]
+      : ["install"];
   try {
     execFileSync(installBin, installArgs, { cwd: dest, stdio: "pipe" });
     logger.log(`  generated ${pm} lockfile`);
@@ -497,7 +551,9 @@ async function exportStandalonePackage(
       const wsContent = await readFile(wsPath, "utf-8");
       const cleaned = wsContent.replace(/set this to true or false/g, "true");
       await writeFile(wsPath, cleaned);
-      logger.log("  cleaned pnpm-workspace.yaml (resolved allowBuilds prompts)");
+      logger.log(
+        "  cleaned pnpm-workspace.yaml (resolved allowBuilds prompts)",
+      );
     } catch {
       /* no pnpm-workspace.yaml, no-op */
     }
@@ -543,7 +599,12 @@ async function exportStandalonePackage(
 
   // 8. Git commit + push
   emit({ phase: "gitCommit", message: changelogCommitMessage });
-  const gitResult = await commitExport(dest, changelogCommitMessage, config.git, logger);
+  const gitResult = await commitExport(
+    dest,
+    changelogCommitMessage,
+    config.git,
+    logger,
+  );
   if (gitResult.pushed) {
     emit({ phase: "gitPush", remote: config.git?.remote ?? "origin" });
   }
@@ -560,4 +621,288 @@ async function exportStandalonePackage(
   };
   emit({ phase: "complete", result });
   return result;
+}
+
+interface NamedExport {
+  kind: "function" | "const" | "class" | "interface" | "type" | "enum";
+  name: string;
+}
+
+async function generateStubShims(
+  root: string,
+  dest: string,
+  config: ExtractConfig,
+  logger: Logger,
+): Promise<void> {
+  if (!config.stubPackages || config.stubPackages.length === 0) return;
+
+  const shimDir = path.join(dest, "src", "types");
+  await mkdir(shimDir, { recursive: true });
+
+  for (const pkgName of config.stubPackages) {
+    const pkgDir = await findPackageDir(root, pkgName);
+    if (!pkgDir) {
+      logger.log(`  skipped ${pkgName} (not found in monorepo)`);
+      continue;
+    }
+
+    const pkgJsonPath = path.join(pkgDir, "package.json");
+    const pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
+    const exports = pkgJson.exports ?? {};
+    const shortName = pkgName.split("/").pop() ?? pkgName;
+    const shimFileName = `${shortName}-shims.d.ts`;
+    const shimPath = path.join(shimDir, shimFileName);
+
+    const lines: string[] = [
+      `// Auto-generated type shims for ${pkgName}.`,
+      `// Generated by repo-extract from source exports. Do not edit manually.`,
+      ``,
+    ];
+
+    const seenModules = new Set<string>();
+
+    for (const [exportKey, exportValue] of Object.entries(exports) as [
+      string,
+      unknown,
+    ][]) {
+      if (exportKey === "./package.json") continue;
+
+      const modulePath =
+        exportKey === "." ? pkgName : `${pkgName}${exportKey.slice(1)}`;
+
+      if (seenModules.has(modulePath)) continue;
+      seenModules.add(modulePath);
+
+      const sourceFile = resolveSourceFile(pkgDir, exportValue);
+      const namedExports = sourceFile
+        ? parseNamedExportsRecursive(sourceFile, 0)
+        : [];
+
+      lines.push(`declare module "${modulePath}" {`);
+
+      if (namedExports.length === 0) {
+        lines.push(`  const _: any;`);
+        lines.push(`  export = _;`);
+      } else {
+        const seen = new Set<string>();
+        for (const exp of namedExports) {
+          if (seen.has(exp.name)) continue;
+          seen.add(exp.name);
+
+          if (exp.kind === "function") {
+            lines.push(`  export function ${exp.name}(...args: any[]): any;`);
+          } else if (exp.kind === "const") {
+            lines.push(`  export const ${exp.name}: any;`);
+          } else if (exp.kind === "class") {
+            lines.push(
+              `  export class ${exp.name} { constructor(...args: any[]); }`,
+            );
+          } else if (exp.kind === "interface") {
+            lines.push(`  export interface ${exp.name} {}`);
+          } else if (exp.kind === "type") {
+            lines.push(`  export type ${exp.name} = any;`);
+          } else if (exp.kind === "enum") {
+            lines.push(`  export enum ${exp.name} {}`);
+          }
+        }
+      }
+
+      lines.push(`}`);
+      lines.push(``);
+    }
+
+    await writeFile(shimPath, lines.join("\n"));
+    logger.log(`  generated ${shimFileName} (${seenModules.size} modules)`);
+  }
+}
+
+async function findPackageDir(
+  root: string,
+  pkgName: string,
+): Promise<string | null> {
+  const packagesDir = path.join(root, "packages");
+  try {
+    const entries = await readdir(packagesDir);
+    for (const entry of entries) {
+      const pkgJsonPath = path.join(packagesDir, entry, "package.json");
+      try {
+        const pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
+        if (pkgJson.name === pkgName) {
+          return path.join(packagesDir, entry);
+        }
+      } catch {
+        // not a package, skip
+      }
+    }
+  } catch {
+    // no packages dir, skip
+  }
+  return null;
+}
+
+function resolveSourceFile(
+  pkgDir: string,
+  exportValue: unknown,
+): string | null {
+  let resolvedPath: string | undefined;
+
+  if (typeof exportValue === "string") {
+    resolvedPath = exportValue;
+  } else if (typeof exportValue === "object" && exportValue !== null) {
+    const obj = exportValue as Record<string, unknown>;
+    if (typeof obj.types === "string") {
+      resolvedPath = obj.types;
+    } else if (typeof obj.default === "string") {
+      resolvedPath = obj.default;
+    } else {
+      for (const v of Object.values(obj)) {
+        if (typeof v === "string") {
+          resolvedPath = v;
+          break;
+        } else if (typeof v === "object" && v !== null) {
+          const inner = v as Record<string, unknown>;
+          if (typeof inner.types === "string") {
+            resolvedPath = inner.types;
+            break;
+          } else if (typeof inner.default === "string") {
+            resolvedPath = inner.default;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (!resolvedPath) return null;
+
+  const fullPath = path.resolve(pkgDir, resolvedPath);
+  if (existsSync(fullPath) && fullPath.endsWith(".ts")) {
+    return fullPath;
+  }
+  return null;
+}
+
+function parseNamedExportsRecursive(
+  filePath: string,
+  depth: number,
+): NamedExport[] {
+  if (depth > 2) return [];
+
+  let content: string;
+  try {
+    content = readFileSync(filePath, "utf-8");
+  } catch {
+    return [];
+  }
+
+  let exports = parseNamedExports(content);
+
+  const wildcardRegex = /export\s+\*\s+from\s+["']([^"']+)["']/g;
+  let match: RegExpExecArray | null;
+  while ((match = wildcardRegex.exec(content)) !== null) {
+    const targetPath = resolveImportPath(filePath, match[1]);
+    if (targetPath) {
+      exports = exports.concat(
+        parseNamedExportsRecursive(targetPath, depth + 1),
+      );
+    }
+  }
+
+  const reExportRegex = /export\s+\{([^}]+)\}\s+from\s+["']([^"']+)["']/g;
+  while ((match = reExportRegex.exec(content)) !== null) {
+    const names = match[1]
+      .split(",")
+      .map((s) =>
+        s
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
+    for (const name of names) {
+      exports.push({ kind: "const", name });
+    }
+  }
+
+  return exports;
+}
+
+function parseNamedExports(content: string): NamedExport[] {
+  const exports: NamedExport[] = [];
+  let match: RegExpExecArray | null;
+
+  const funcRegex = /export\s+(?:async\s+)?function\s+(\w+)/g;
+  while ((match = funcRegex.exec(content)) !== null) {
+    exports.push({ kind: "function", name: match[1] });
+  }
+
+  const constRegex = /export\s+const\s+(\w+)/g;
+  while ((match = constRegex.exec(content)) !== null) {
+    exports.push({ kind: "const", name: match[1] });
+  }
+
+  const letRegex = /export\s+let\s+(\w+)/g;
+  while ((match = letRegex.exec(content)) !== null) {
+    exports.push({ kind: "const", name: match[1] });
+  }
+
+  const classRegex = /export\s+class\s+(\w+)/g;
+  while ((match = classRegex.exec(content)) !== null) {
+    exports.push({ kind: "class", name: match[1] });
+  }
+
+  const interfaceRegex = /export\s+interface\s+(\w+)/g;
+  while ((match = interfaceRegex.exec(content)) !== null) {
+    exports.push({ kind: "interface", name: match[1] });
+  }
+
+  const typeRegex = /export\s+type\s+(\w+)/g;
+  while ((match = typeRegex.exec(content)) !== null) {
+    exports.push({ kind: "type", name: match[1] });
+  }
+
+  const enumRegex = /export\s+enum\s+(\w+)/g;
+  while ((match = enumRegex.exec(content)) !== null) {
+    exports.push({ kind: "enum", name: match[1] });
+  }
+
+  const namedRegex = /export\s*\{([^}]+)\}(?!\s*from)/g;
+  while ((match = namedRegex.exec(content)) !== null) {
+    const names = match[1]
+      .split(",")
+      .map((s) =>
+        s
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
+    for (const name of names) {
+      exports.push({ kind: "const", name });
+    }
+  }
+
+  return exports;
+}
+
+function resolveImportPath(
+  fromFile: string,
+  importPath: string,
+): string | null {
+  if (!importPath.startsWith(".")) return null;
+
+  const dir = path.dirname(fromFile);
+  const candidates = [
+    path.resolve(dir, importPath),
+    path.resolve(dir, importPath + ".ts"),
+    path.resolve(dir, importPath + "/index.ts"),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
 }

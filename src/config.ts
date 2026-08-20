@@ -39,8 +39,13 @@ const PatchRuleSchema = z
     removeLinesMatching: z.string().optional(),
   })
   .refine(
-    (v) => v.removeLinesMatching !== undefined || (v.find !== undefined && v.replace !== undefined),
-    { message: "patch rule must have either (find + replace) or removeLinesMatching" },
+    (v) =>
+      v.removeLinesMatching !== undefined ||
+      (v.find !== undefined && v.replace !== undefined),
+    {
+      message:
+        "patch rule must have either (find + replace) or removeLinesMatching",
+    },
   );
 
 const DeleteRuleSchema = z.object({
@@ -90,6 +95,7 @@ const ExtractConfigSchema = z.object({
   excludeExtensions: z.array(z.string()).optional(),
   skipSecretScan: z.boolean().optional(),
   versionBump: z.enum(["patch", "minor", "major"]).optional(),
+  stubPackages: z.array(z.string()).default([]),
 });
 
 export async function loadConfig(configPath: string): Promise<ExtractConfig> {

@@ -83,6 +83,7 @@ export interface ExtractConfig {
   excludeExtensions?: string[];
   skipSecretScan?: boolean;
   versionBump?: VersionBump;
+  stubPackages?: string[];
 }
 
 export interface ExtractContext {

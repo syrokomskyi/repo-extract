@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Public API exports for @warpgogol/repo-extract.</purpose>
+<purpose>Public API exports for @warpgogol/repo-extract. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not implement CLI parsing (see cli.ts).</item>
   <item>Does not implement config loading (see config.ts).</item>

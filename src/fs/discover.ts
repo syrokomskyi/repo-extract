@@ -1,13 +1,12 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Auto-discovery of transitive workspace package dependencies.</purpose>
+<purpose>Auto-discovery of transitive workspace package dependencies. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not copy or transform files (see copy.ts, transform.ts).</item>
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>Ported discoverPackageDeps from scripts/export-clients-helpers.ts for RFC-0070. Supports both @syrokomskyi/ and @warpgogol/ prefixes.</item>
-  <item>RFC-0071: Default workspacePrefixes changed from ["@syrokomskyi/", "@warpgogol/"] to [] (empty). Callers must pass explicit prefixes.
 </CHANGE_SUMMARY>
 */
 

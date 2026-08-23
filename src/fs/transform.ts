@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Package.json and tsconfig transformation utilities for exported repos.</purpose>
+<purpose>Package.json and tsconfig transformation utilities for exported repos. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not copy files (see copy.ts).</item>
 </non-goals>

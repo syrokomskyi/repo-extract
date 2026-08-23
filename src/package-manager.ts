@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Detect package manager from lockfile presence in source root.</purpose>
+<purpose>Detect package manager from lockfile presence in source root. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not install packages or generate lockfiles (see extract.ts).</item>
 </non-goals>

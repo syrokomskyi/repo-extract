@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Zod schema and loader for extract.config.yaml files.</purpose>
+<purpose>Zod schema and loader for extract.config.yaml files. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not implement extraction logic (see extract.ts).</item>
 </non-goals>

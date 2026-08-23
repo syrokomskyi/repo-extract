@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Optional changelog-live integration via dynamic import.</purpose>
+<purpose>Optional changelog-live integration via dynamic import. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not hard-depend on @warpgogol/changelog-live — it is an optional peer dependency.</item>
 </non-goals>

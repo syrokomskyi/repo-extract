@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
 <MODULE_CONTRACT>
-<purpose>CLI entrypoint for @warpgogol/repo-extract.</purpose>
+<purpose>CLI entrypoint for @warpgogol/repo-extract. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not implement extraction logic (see extract.ts).</item>
 </non-goals>

@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Filtered filesystem copy utilities for monorepo export.</purpose>
+<purpose>Filtered filesystem copy utilities for monorepo export. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not transform package.json (see transform.ts).</item>
   <item>Does not discover dependencies (see discover.ts).</item>

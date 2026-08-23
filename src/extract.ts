@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Core extraction orchestrator — monorepo and standalone modes.</purpose>
+<purpose>Core extraction orchestrator — monorepo and standalone modes. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not parse CLI args (see cli.ts).</item>
 </non-goals>

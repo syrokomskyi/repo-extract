@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Shared types for @warpgogol/repo-extract.</purpose>
+<purpose>Shared types for @warpgogol/repo-extract. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not define Zod schemas (see config.ts).</item>
   <item>Does not implement logic (see extract.ts, fs/*.ts).</item>

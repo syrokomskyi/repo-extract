@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Declarative post-process rule executor (copy, patch, delete).</purpose>
+<purpose>Declarative post-process rule executor (copy, patch, delete). for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not support variable interpolation or JS hooks.</item>
 </non-goals>

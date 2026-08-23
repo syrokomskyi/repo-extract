@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Git init, commit, and push helpers for exported repos.</purpose>
+<purpose>Git init, commit, and push helpers for exported repos. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not implement AI commit message generation (see changelog.ts).</item>
 </non-goals>

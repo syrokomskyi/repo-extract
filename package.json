@@ -1,6 +1,6 @@
 {
   "name": "@warpgogol/repo-extract",
-  "version": "1.2.2",
+  "version": "1.2.5",
   "description": "Extract apps and packages from a TurboRepo monorepo into standalone public repositories",
   "license": "Apache-2.0",
   "author": "Andrii Syrokomskyi <andrii@syrokomskyi.com> (https://syrokomskyi.com)",

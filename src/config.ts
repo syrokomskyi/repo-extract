@@ -64,6 +64,7 @@ const CiConfigSchema = z.object({
   packageManager: z.enum(["pnpm", "npm", "yarn"]).optional(),
   publish: z.boolean().default(true),
   nodeVersion: z.number().default(22),
+  provenance: z.boolean().default(false),
 });
 
 const ExtractConfigSchema = z.object({

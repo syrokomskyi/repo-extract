@@ -24,6 +24,7 @@ export interface CiConfig {
   packageManager?: PackageManager;
   publish: boolean;
   nodeVersion: number;
+  provenance?: boolean;
 }
 
 export type PostProcessAction = "copy" | "patch" | "delete";

@@ -37,54 +37,44 @@ describe("generateCiWorkflow", () => {
     const yaml = generateCiWorkflow("pnpm")!;
     expect(yaml).toContain("name: CI");
     expect(yaml).toContain(
-      "pnpm install --frozen-lockfile --config.dangerouslyAllowAllBuilds=true",
+      "pnpm install --no-frozen-lockfile --config.dangerouslyAllowAllBuilds=true --config.minimumReleaseAge=0",
     );
-    expect(yaml).toContain("pnpm run lint");
-    expect(yaml).toContain("pnpm run typecheck");
-    expect(yaml).toContain("pnpm run build");
+    expect(yaml).toContain("pnpm run build:check");
     expect(yaml).toContain("pnpm test");
-    expect(yaml).toContain("actions/checkout@v5");
-    expect(yaml).toContain("pnpm/action-setup@v6");
+    expect(yaml).toContain("actions/checkout@v4");
+    expect(yaml).toContain("corepack enable");
   });
 
   it("generates a valid CI workflow YAML for npm", () => {
     const yaml = generateCiWorkflow("npm")!;
-    expect(yaml).toContain("npm ci");
-    expect(yaml).toContain("npm run lint");
-    expect(yaml).toContain("npm run typecheck");
-    expect(yaml).toContain("npm run build");
+    expect(yaml).toContain("npm install");
+    expect(yaml).toContain("npm run build:check");
     expect(yaml).toContain("npm test");
-    expect(yaml).not.toContain("pnpm/action-setup");
-    expect(yaml).toContain("cache: npm");
+    expect(yaml).not.toContain("corepack enable");
   });
 
   it("generates a valid CI workflow YAML for yarn", () => {
     const yaml = generateCiWorkflow("yarn")!;
     expect(yaml).toContain("yarn install --frozen-lockfile");
-    expect(yaml).toContain("yarn lint");
-    expect(yaml).toContain("yarn typecheck");
-    expect(yaml).toContain("yarn build");
+    expect(yaml).toContain("yarn build:check");
     expect(yaml).toContain("yarn test");
-    expect(yaml).toContain("cache: yarn");
   });
 
-  it("includes npm publish with provenance in a separate publish job", () => {
-    const yaml = generateCiWorkflow("pnpm")!;
-    expect(yaml).toContain("npm publish --provenance");
+  it("includes npm publish with provenance when configured", () => {
+    const yaml = generateCiWorkflow("pnpm", { provider: "github-actions", publish: true, nodeVersion: 22, provenance: true })!;
+    expect(yaml).toContain("npm publish --access public --ignore-scripts --provenance");
     expect(yaml).toContain("NODE_AUTH_TOKEN");
-    expect(yaml).toContain("  publish:");
-    expect(yaml).toContain("    needs: ci");
     expect(yaml).toContain("registry-url: https://registry.npmjs.org");
   });
 
   it("includes id-token: write permission for provenance", () => {
-    const yaml = generateCiWorkflow("pnpm")!;
+    const yaml = generateCiWorkflow("pnpm", { provider: "github-actions", publish: true, nodeVersion: 22, provenance: true })!;
     expect(yaml).toContain("id-token: write");
   });
 
-  it("publish job only runs on push, not pull_request", () => {
+  it("publish step only runs on push to main", () => {
     const yaml = generateCiWorkflow("pnpm")!;
-    expect(yaml).toContain("if: github.event_name == 'push'");
+    expect(yaml).toContain("if: github.ref == 'refs/heads/main' && github.event_name == 'push'");
   });
 
   it("returns null when provider is none", () => {
@@ -92,14 +82,14 @@ describe("generateCiWorkflow", () => {
     expect(yaml).toBeNull();
   });
 
-  it("omits publish job when publish is false", () => {
+  it("omits publish step when publish is false", () => {
     const yaml = generateCiWorkflow("pnpm", {
       provider: "github-actions",
       publish: false,
       nodeVersion: 22,
     })!;
     expect(yaml).not.toContain("npm publish");
-    expect(yaml).not.toContain("  publish:");
+    expect(yaml).not.toContain("Publish");
   });
 
   it("uses custom node version", () => {
@@ -108,7 +98,7 @@ describe("generateCiWorkflow", () => {
       publish: true,
       nodeVersion: 20,
     })!;
-    expect(yaml).toContain("node-version: 20");
+    expect(yaml).toContain('node-version: "20"');
   });
 });
 

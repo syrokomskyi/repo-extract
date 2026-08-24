@@ -593,6 +593,10 @@ export function generateCiWorkflow(
   if (publish) {
     lines.push(
       "",
+      "      - name: Build",
+      "        if: github.ref == 'refs/heads/main' && github.event_name == 'push'",
+      `        run: ${runPrefix} build`,
+      "",
       "      - name: Publish",
       "        if: github.ref == 'refs/heads/main' && github.event_name == 'push'",
       "        run: |",

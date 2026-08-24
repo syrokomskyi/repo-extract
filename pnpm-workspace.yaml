@@ -1,2 +1,4 @@
+allowBuilds:
+  esbuild: set this to true or false
 minimumReleaseAgeExclude:
   - '@warpgogol/changelog-live@0.1.0'

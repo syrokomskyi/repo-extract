@@ -353,7 +353,7 @@ async function exportMonorepo(
   const installBin = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
   const installArgs =
     pm === "pnpm"
-      ? ["install", "--config.dangerouslyAllowAllBuilds=true"]
+      ? ["install", "--config.dangerouslyAllowAllBuilds=true", "--config.minimumReleaseAge=0"]
       : ["install"];
   try {
     execFileSync(installBin, installArgs, { cwd: dest, stdio: "pipe" });
@@ -528,7 +528,7 @@ async function exportStandalonePackage(
   const installBin = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
   const installArgs =
     pm === "pnpm"
-      ? ["install", "--config.dangerouslyAllowAllBuilds=true"]
+      ? ["install", "--config.dangerouslyAllowAllBuilds=true", "--config.minimumReleaseAge=0"]
       : ["install"];
   try {
     execFileSync(installBin, installArgs, { cwd: dest, stdio: "pipe" });
@@ -549,13 +549,30 @@ async function exportStandalonePackage(
     const wsPath = path.join(dest, "pnpm-workspace.yaml");
     try {
       const wsContent = await readFile(wsPath, "utf-8");
-      const cleaned = wsContent.replace(/set this to true or false/g, "true");
+      let cleaned = wsContent.replace(/set this to true or false/g, "true");
+      if (!cleaned.includes("minimumReleaseAge:")) {
+        cleaned = "minimumReleaseAge: 0\n" + cleaned;
+      }
       await writeFile(wsPath, cleaned);
       logger.log(
-        "  cleaned pnpm-workspace.yaml (resolved allowBuilds prompts)",
+        "  cleaned pnpm-workspace.yaml (resolved allowBuilds prompts, minimumReleaseAge: 0)",
       );
     } catch {
-      /* no pnpm-workspace.yaml, no-op */
+      /* no pnpm-workspace.yaml — create one with minimumReleaseAge: 0 */
+      await writeFile(wsPath, "minimumReleaseAge: 0\npackages: []\n");
+      logger.log("  created pnpm-workspace.yaml with minimumReleaseAge: 0");
+    }
+    // 4e2. Write .npmrc with minimum-release-age=0 so all pnpm invocations respect it
+    const npmrcPath = path.join(dest, ".npmrc");
+    try {
+      const existing = await readFile(npmrcPath, "utf-8");
+      if (!existing.includes("minimum-release-age")) {
+        await writeFile(npmrcPath, existing.trimEnd() + "\nminimum-release-age=0\n");
+        logger.log("  added minimum-release-age=0 to .npmrc");
+      }
+    } catch {
+      await writeFile(npmrcPath, "minimum-release-age=0\n");
+      logger.log("  wrote .npmrc with minimum-release-age=0");
     }
   }
 

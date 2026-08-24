@@ -546,7 +546,7 @@ export function generateCiWorkflow(
 
   const installCmd =
     pm === "pnpm"
-      ? "pnpm install --no-frozen-lockfile --config.dangerouslyAllowAllBuilds=true"
+      ? "pnpm install --no-frozen-lockfile --config.dangerouslyAllowAllBuilds=true --config.minimumReleaseAge=0"
       : pm === "yarn"
         ? "yarn install --frozen-lockfile"
         : "npm install";

@@ -4,6 +4,10 @@
 
 Extract apps and packages from a TurboRepo monorepo into standalone public repositories.
 
+> Engineered at [Warpgogol](https://warpgogol.com) · Released as open source.
+
+---
+
 ## Features
 
 - Extracts one or more workspace projects from a Turborepo monorepo
@@ -139,12 +143,21 @@ await extractProject(config, { dest: "../my-package" });
 | ------------------------------------------ | -------------------------------------------- |
 | `extractProject(config, options)`          | Run the full extraction pipeline             |
 | `loadConfig(path)`                         | Load and validate an `extract.config.yaml`   |
+| `ExtractConfigSchema`                      | Zod schema for extract config validation     |
+| `detectPackageManager(root)`               | Detect package manager from lockfiles        |
 | `scanForSecrets(dir)`                      | Scan a directory for secret patterns         |
 | `transferGitHistory(root, dest, prefixes)` | Transfer filtered git history                |
 | `commitExport(dest, message, gitConfig)`   | Commit and optionally push                   |
-| `generateCiWorkflow()`                     | Generate a GitHub Actions CI workflow string |
+| `diffSummary(...)`                         | Generate diff summary for changes            |
+| `generateCiWorkflow(pm, ci?)`              | Generate a GitHub Actions CI workflow string |
 | `fixStandalonePackageJson(dest)`           | Fix package.json for standalone export       |
 | `fixStandaloneVitestConfig(dest)`          | Fix vitest.config.ts for standalone export   |
+| `buildGitignore(extra, config)`            | Build .gitignore content                     |
+| `buildRootPackageJson(config)`             | Build root package.json for monorepo export  |
+| `isIgnored(path, patterns)`                | Check if path matches ignore patterns        |
+| `SecretScanError`                          | Error thrown when secrets are found          |
+| `GitOperationError`                        | Error thrown on git operation failure        |
+| `PackageManagerError`                      | Error thrown on package manager failure      |
 
 ## Changelog
 
@@ -159,3 +172,11 @@ await extractProject(config, { dest: "../my-package" });
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE)
+
+## Open Engineering
+
+This package originated from production engineering work at [Warpgogol](https://warpgogol.com), an engineering studio in Germany.
+
+We publish reusable parts of our infrastructure when they can be useful beyond our own projects. It is published independently of any Warpgogol commercial service. Using this package does not create any dependency on Warpgogol.
+
+Built for real systems. Shared openly.

@@ -138,6 +138,7 @@ export type ExtractProgressEvent =
   | { phase: "transforming"; file: string }
   | { phase: "postProcess"; rule: PostProcessRule }
   | { phase: "scanning"; dest: string }
+  | { phase: "gitHistory"; pathPrefixes: string[] }
   | { phase: "gitCommit"; message: string }
   | { phase: "gitPush"; remote: string }
   | { phase: "complete"; result: ExtractResult }

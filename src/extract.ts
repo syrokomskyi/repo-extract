@@ -57,7 +57,7 @@ import {
 } from "./fs/transform.js";
 import { discoverPackageDeps } from "./fs/discover.js";
 import { runPostProcess } from "./postprocess/index.js";
-import { commitExport } from "./fs/git.js";
+import { commitExport, transferGitHistory } from "./fs/git.js";
 import { tryGenerateChangelog } from "./changelog.js";
 import { scanForSecrets } from "./scan.js";
 import { detectPackageManager } from "./package-manager.js";
@@ -376,6 +376,11 @@ async function exportMonorepo(
     logger.log("  no secrets found");
   }
 
+  // 15c. Transfer git history
+  const pathPrefixes = [config.projectDir, ...config.appDirs];
+  emit({ phase: "gitHistory", pathPrefixes });
+  await transferGitHistory(root, dest, pathPrefixes, logger);
+
   // 16. Git commit + push
   emit({ phase: "gitCommit", message: changelogCommitMessage });
   const gitResult = await commitExport(dest, changelogCommitMessage, config.git, logger);
@@ -535,6 +540,11 @@ async function exportStandalonePackage(
     }
     logger.log("  no secrets found");
   }
+
+  // 6c. Transfer git history
+  const pathPrefixes = [config.projectDir];
+  emit({ phase: "gitHistory", pathPrefixes });
+  await transferGitHistory(root, dest, pathPrefixes, logger);
 
   // 7. Git commit + push
   emit({ phase: "gitCommit", message: changelogCommitMessage });

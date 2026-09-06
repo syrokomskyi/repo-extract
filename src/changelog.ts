@@ -14,12 +14,12 @@
 
 import { existsSync } from "node:fs";
 import * as path from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import type { Logger } from "./log.js";
 
 function loadEnvForChangelog(projectDir: string): void {
   try {
-    const repoRoot = execSync("git rev-parse --show-toplevel", {
+    const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
       cwd: projectDir,
       encoding: "utf-8",
     }).trim();

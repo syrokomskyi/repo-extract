@@ -511,6 +511,13 @@ async function exportStandalonePackage(
   logger.log("Cleaning stray artifacts...");
   await cleanStrayArtifacts(dest);
 
+  // 5a. Run post-process rules
+  if (config.postProcess && config.postProcess.length > 0) {
+    logger.log("Running post-process rules...");
+    const ctx: ExtractContext = { root, dest, config, packageDirs: [] };
+    await runPostProcess(ctx, config.postProcess, emit, logger);
+  }
+
   // 5b. Generate CI workflow
   logger.log("Generating CI workflow...");
   const ciDir = path.join(dest, ".github", "workflows");

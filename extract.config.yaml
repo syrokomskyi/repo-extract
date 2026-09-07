@@ -38,4 +38,3 @@ git:
   autoPush: true
 
 skipSecretScan: true
-versionBump: patch

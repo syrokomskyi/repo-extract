@@ -88,7 +88,11 @@ describe("generateCiWorkflow", () => {
   });
 
   it("returns null when provider is none", () => {
-    const yaml = generateCiWorkflow("pnpm", { provider: "none", publish: false, nodeVersion: 22 });
+    const yaml = generateCiWorkflow("pnpm", {
+      provider: "none",
+      publish: false,
+      nodeVersion: 22,
+    });
     expect(yaml).toBeNull();
   });
 
@@ -129,7 +133,9 @@ describe("generateCiWorkflow", () => {
     expect(yaml).toContain("if: github.event_name == 'push'");
     expect(yaml).toContain("wrangler deploy");
     expect(yaml).toContain("working-directory: apps/hdri/dashboard");
-    expect(yaml).toContain("          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}");
+    expect(yaml).toContain(
+      "          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}",
+    );
     expect(yaml).not.toContain("npm publish");
   });
 
@@ -147,7 +153,9 @@ describe("generateCiWorkflow", () => {
         accountIdSecret: "CLOUDFLARE_ACCOUNT_ID",
       },
     })!;
-    expect(yaml).toContain("          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
+    expect(yaml).toContain(
+      "          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+    );
   });
 
   it("omits deploy job when deploy is not configured", () => {
@@ -169,6 +177,39 @@ describe("generateCiWorkflow", () => {
     expect(yaml).not.toContain("pnpm run build");
     expect(yaml).toContain("pnpm run lint");
     expect(yaml).toContain("pnpm run typecheck");
+  });
+
+  it("includes gh release create step after npm publish", () => {
+    const yaml = generateCiWorkflow("pnpm")!;
+    expect(yaml).toContain("gh release create");
+    expect(yaml).toContain("--generate-notes");
+    expect(yaml).toContain("--latest || true");
+    expect(yaml).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
+    const publishIdx = yaml.indexOf("npm publish");
+    const releaseIdx = yaml.indexOf("gh release create");
+    expect(publishIdx).toBeGreaterThan(-1);
+    expect(releaseIdx).toBeGreaterThan(publishIdx);
+  });
+
+  it("gates release step on push to main", () => {
+    const yaml = generateCiWorkflow("pnpm")!;
+    expect(yaml).toContain(
+      "if: github.ref == 'refs/heads/main' && github.event_name == 'push'",
+    );
+  });
+
+  it("uses contents: write permission in publish job for release creation", () => {
+    const yaml = generateCiWorkflow("pnpm")!;
+    expect(yaml).toContain("contents: write");
+  });
+
+  it("omits release step when publish is false", () => {
+    const yaml = generateCiWorkflow("pnpm", {
+      provider: "github-actions",
+      publish: false,
+      nodeVersion: 22,
+    })!;
+    expect(yaml).not.toContain("gh release create");
   });
 });
 
@@ -210,8 +251,12 @@ describe("buildRootPackageJson", () => {
     const pkg = buildRootPackageJson("my-app", config, "pnpm") as {
       scripts: Record<string, string>;
     };
-    expect(pkg.scripts.build).toContain("--filter @acme/dashboard... run --if-present build");
-    expect(pkg.scripts.lint).toContain("--filter @acme/dashboard... run --if-present lint");
+    expect(pkg.scripts.build).toContain(
+      "--filter @acme/dashboard... run --if-present build",
+    );
+    expect(pkg.scripts.lint).toContain(
+      "--filter @acme/dashboard... run --if-present lint",
+    );
   });
 });
 
@@ -234,11 +279,16 @@ describe("fixStandalonePackageJson", () => {
         test: "pnpm --dir ../../.. exec vitest run --config packages/test/vitest.config.ts",
       },
     };
-    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+    await writeFile(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify(pkg, null, 2),
+    );
 
     await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
-    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    const result = JSON.parse(
+      await readFile(path.join(tmpDir, "package.json"), "utf-8"),
+    );
     expect(result.scripts.test).toBe("vitest run");
   });
 
@@ -249,11 +299,16 @@ describe("fixStandalonePackageJson", () => {
         zod: "workspace:*",
       },
     };
-    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+    await writeFile(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify(pkg, null, 2),
+    );
 
     await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
-    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    const result = JSON.parse(
+      await readFile(path.join(tmpDir, "package.json"), "utf-8"),
+    );
     expect(result.dependencies.zod).toBe("*");
   });
 
@@ -267,14 +322,21 @@ describe("fixStandalonePackageJson", () => {
         vitest: "^4.0.0",
       },
     };
-    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+    await writeFile(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify(pkg, null, 2),
+    );
 
     await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
-    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    const result = JSON.parse(
+      await readFile(path.join(tmpDir, "package.json"), "utf-8"),
+    );
     expect(result.devDependencies).toHaveProperty("@warpgogol/repo-extract");
     expect(result.devDependencies).not.toHaveProperty("@wgogol/old");
-    expect(result.devDependencies).not.toHaveProperty("@warpgogol/changelog-live");
+    expect(result.devDependencies).not.toHaveProperty(
+      "@warpgogol/changelog-live",
+    );
     expect(result.devDependencies).toHaveProperty("vitest");
   });
 
@@ -291,11 +353,16 @@ describe("fixStandalonePackageJson", () => {
         "@warpgogol/changelog-live": "workspace:*",
       },
     };
-    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+    await writeFile(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify(pkg, null, 2),
+    );
 
     await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
-    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    const result = JSON.parse(
+      await readFile(path.join(tmpDir, "package.json"), "utf-8"),
+    );
     expect(result.peerDependencies).toHaveProperty("@warpgogol/changelog-live");
     expect(result.peerDependencies["@warpgogol/changelog-live"]).toBe("*");
     expect(result.peerDependenciesMeta).toBeDefined();
@@ -310,21 +377,31 @@ describe("fixStandalonePackageJson", () => {
       },
       packageManager: "pnpm@10.33.0",
     };
-    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+    await writeFile(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify(pkg, null, 2),
+    );
 
     await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
-    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    const result = JSON.parse(
+      await readFile(path.join(tmpDir, "package.json"), "utf-8"),
+    );
     expect(result.scripts.test).toBe("vitest run");
   });
 
   it("does not modify version when versionBump is not set", async () => {
     const pkg = { name: "@warpgogol/test", version: "1.2.0" };
-    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+    await writeFile(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify(pkg, null, 2),
+    );
 
     await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
-    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    const result = JSON.parse(
+      await readFile(path.join(tmpDir, "package.json"), "utf-8"),
+    );
     expect(result.version).toBe("1.2.0");
   });
 });
@@ -345,7 +422,9 @@ describe("bumpSourceVersion", () => {
       projectDir: "packages/test-pkg",
     });
 
-    const srcResult = JSON.parse(await readFile(path.join(srcPkgDir, "package.json"), "utf-8"));
+    const srcResult = JSON.parse(
+      await readFile(path.join(srcPkgDir, "package.json"), "utf-8"),
+    );
     expect(srcResult.version).toBe("1.2.1");
   });
 
@@ -364,7 +443,9 @@ describe("bumpSourceVersion", () => {
       projectDir: "packages/test-pkg",
     });
 
-    const srcResult = JSON.parse(await readFile(path.join(srcPkgDir, "package.json"), "utf-8"));
+    const srcResult = JSON.parse(
+      await readFile(path.join(srcPkgDir, "package.json"), "utf-8"),
+    );
     expect(srcResult.version).toBe("1.3.0");
   });
 
@@ -383,7 +464,9 @@ describe("bumpSourceVersion", () => {
       projectDir: "packages/test-pkg",
     });
 
-    const srcResult = JSON.parse(await readFile(path.join(srcPkgDir, "package.json"), "utf-8"));
+    const srcResult = JSON.parse(
+      await readFile(path.join(srcPkgDir, "package.json"), "utf-8"),
+    );
     expect(srcResult.version).toBe("2.0.0");
   });
 
@@ -396,9 +479,14 @@ describe("bumpSourceVersion", () => {
       JSON.stringify({ name: "@warpgogol/test", version: "1.2.0" }, null, 2),
     );
 
-    await bumpSourceVersion(srcDir, { ...baseConfig, projectDir: "packages/test-pkg" });
+    await bumpSourceVersion(srcDir, {
+      ...baseConfig,
+      projectDir: "packages/test-pkg",
+    });
 
-    const srcResult = JSON.parse(await readFile(path.join(srcPkgDir, "package.json"), "utf-8"));
+    const srcResult = JSON.parse(
+      await readFile(path.join(srcPkgDir, "package.json"), "utf-8"),
+    );
     expect(srcResult.version).toBe("1.2.0");
   });
 });
@@ -424,7 +512,10 @@ describe("buildGitignore", () => {
       ...baseConfig,
       gitignoreMode: "extended",
     };
-    const content = buildGitignore([".output", ".debug", ".debug-public"], extendedConfig);
+    const content = buildGitignore(
+      [".output", ".debug", ".debug-public"],
+      extendedConfig,
+    );
     expect(content).toContain(".output");
     expect(content).toContain(".debug");
     expect(content).toContain(".debug-public");
@@ -454,7 +545,9 @@ describe("regenerateTsconfigBase", () => {
     };
     await regenerateTsconfigBase(tmpDir, emptyConfig);
 
-    const result = JSON.parse(await readFile(path.join(tmpDir, "tsconfig.base.json"), "utf-8"));
+    const result = JSON.parse(
+      await readFile(path.join(tmpDir, "tsconfig.base.json"), "utf-8"),
+    );
     expect(result.compilerOptions.customConditions).toBeUndefined();
 
     await rm(tmpDir, { recursive: true, force: true });
@@ -469,7 +562,9 @@ describe("regenerateTsconfigBase", () => {
     };
     await regenerateTsconfigBase(tmpDir, ccConfig);
 
-    const result = JSON.parse(await readFile(path.join(tmpDir, "tsconfig.base.json"), "utf-8"));
+    const result = JSON.parse(
+      await readFile(path.join(tmpDir, "tsconfig.base.json"), "utf-8"),
+    );
     expect(result.compilerOptions.customConditions).toEqual(["@acme/source"]);
 
     await rm(tmpDir, { recursive: true, force: true });
@@ -478,7 +573,9 @@ describe("regenerateTsconfigBase", () => {
 
 describe("buildRootPackageJson default name", () => {
   it("uses exported-{destName} when rootPackageName not set", () => {
-    const pkg = buildRootPackageJson("my-app", baseConfig, "pnpm") as { name: string };
+    const pkg = buildRootPackageJson("my-app", baseConfig, "pnpm") as {
+      name: string;
+    };
     expect(pkg.name).toBe("exported-my-app");
   });
 
@@ -487,7 +584,9 @@ describe("buildRootPackageJson default name", () => {
       ...baseConfig,
       rootPackageName: "@acme/clients-hdri",
     };
-    const pkg = buildRootPackageJson("hdri", namedConfig, "pnpm") as { name: string };
+    const pkg = buildRootPackageJson("hdri", namedConfig, "pnpm") as {
+      name: string;
+    };
     expect(pkg.name).toBe("@acme/clients-hdri");
   });
 });
@@ -509,7 +608,10 @@ describe("fixStandaloneVitestConfig", () => {
 
     await fixStandaloneVitestConfig(tmpDir);
 
-    const result = await readFile(path.join(tmpDir, "vitest.config.ts"), "utf-8");
+    const result = await readFile(
+      path.join(tmpDir, "vitest.config.ts"),
+      "utf-8",
+    );
     expect(result).toContain('"tests/**/*.test.ts"');
     expect(result).not.toContain("packages/repo-extract");
   });
@@ -520,7 +622,10 @@ describe("fixStandaloneVitestConfig", () => {
 
     await fixStandaloneVitestConfig(tmpDir);
 
-    const result = await readFile(path.join(tmpDir, "vitest.config.ts"), "utf-8");
+    const result = await readFile(
+      path.join(tmpDir, "vitest.config.ts"),
+      "utf-8",
+    );
     expect(result).toContain('"tests/**/*.test.ts"');
   });
 });

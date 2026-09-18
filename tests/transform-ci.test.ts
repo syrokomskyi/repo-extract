@@ -170,6 +170,37 @@ describe("generateCiWorkflow", () => {
     expect(yaml).toContain("pnpm run lint");
     expect(yaml).toContain("pnpm run typecheck");
   });
+
+  it("includes gh release create step after npm publish", () => {
+    const yaml = generateCiWorkflow("pnpm")!;
+    expect(yaml).toContain("gh release create");
+    expect(yaml).toContain("--generate-notes");
+    expect(yaml).toContain("--latest || true");
+    expect(yaml).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
+    const publishIdx = yaml.indexOf("npm publish");
+    const releaseIdx = yaml.indexOf("gh release create");
+    expect(publishIdx).toBeGreaterThan(-1);
+    expect(releaseIdx).toBeGreaterThan(publishIdx);
+  });
+
+  it("gates release step on push to main", () => {
+    const yaml = generateCiWorkflow("pnpm")!;
+    expect(yaml).toContain("if: github.ref == 'refs/heads/main' && github.event_name == 'push'");
+  });
+
+  it("uses contents: write permission in publish job for release creation", () => {
+    const yaml = generateCiWorkflow("pnpm")!;
+    expect(yaml).toContain("contents: write");
+  });
+
+  it("omits release step when publish is false", () => {
+    const yaml = generateCiWorkflow("pnpm", {
+      provider: "github-actions",
+      publish: false,
+      nodeVersion: 22,
+    })!;
+    expect(yaml).not.toContain("gh release create");
+  });
 });
 
 describe("buildRootPackageJson", () => {

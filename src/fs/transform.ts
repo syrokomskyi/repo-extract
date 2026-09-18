@@ -12,6 +12,7 @@
   <item>RFC-0072: Parameterized buildRootPackageJson, generateRootFiles, generateCiWorkflow, fixStandalonePackageJson for pnpm/npm/yarn support.</item>
   <item>Fix: Split generateCiWorkflow into ci + publish jobs — publish only on push to main, with registry-url for NODE_AUTH_TOKEN.</item>
   <item>ADR-0082: preservePackages workspace:* deps now pin to ^<sourceVersion> instead of * — extracted lockfiles resolve the just-published sibling under pnpm minimumReleaseAge.</item>
+  <item>RFC-1081: Added gh release create step after npm publish with --generate-notes and || true for tag collision. Updated publish job permissions to contents: write. (Ported back from standalone repo — was committed there directly on 2026-09-13.)</item>
 </CHANGE_SUMMARY>
 */
 
@@ -549,7 +550,7 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
       "    runs-on: ubuntu-latest",
       "    timeout-minutes: 10",
       "    permissions:",
-      "      contents: read",
+      "      contents: write",
       "      id-token: write",
       "    steps:",
       "      - uses: actions/checkout@v5",
@@ -564,6 +565,16 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
       "      - run: npm publish --provenance --access public",
       "        env:",
       "          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}",
+      "      - name: Create GitHub Release",
+      "        if: github.ref == 'refs/heads/main' && github.event_name == 'push'",
+      "        run: |",
+      "          VERSION=$(node -p \"require('./package.json').version\")",
+      '          gh release create "v${VERSION}" \\',
+      '            --title "v${VERSION}" \\',
+      "            --generate-notes \\",
+      "            --latest || true",
+      "        env:",
+      "          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}",
     );
   }
 

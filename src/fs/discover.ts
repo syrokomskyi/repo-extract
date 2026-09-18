@@ -111,7 +111,7 @@ export async function resolveSourceVersion(root: string, pkgName: string): Promi
   if (!pkgDir) return null;
   try {
     const raw = await readFile(path.join(pkgDir, "package.json"), "utf-8");
-    const pkg = JSON.parse(raw);
+    const pkg = JSON.parse(raw) as { version?: unknown };
     return typeof pkg.version === "string" && pkg.version.length > 0 ? pkg.version : null;
   } catch {
     return null;

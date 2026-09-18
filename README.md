@@ -65,7 +65,7 @@ git:
   autoPush: true
 ```
 
-Standalone mode flattens the package to the repo root — `src/`, `tests/`, `package.json`, etc. become top-level. Workspace dependencies (`workspace:*`) are replaced with `*`, and `@warpgogol/*` devDependencies are stripped (except the package itself).
+Standalone mode flattens the package to the repo root — `src/`, `tests/`, `package.json`, etc. become top-level. Workspace dependencies (`workspace:*`) are replaced with `*` — except packages listed in `preservePackages`, which are pinned to `^<sourceVersion>` resolved from the source monorepo (ADR-0082). `@warpgogol/*` devDependencies are stripped (except the package itself).
 
 ### Multi-app monorepo export
 

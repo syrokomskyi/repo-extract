@@ -327,6 +327,102 @@ describe("fixStandalonePackageJson", () => {
     const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
     expect(result.version).toBe("1.2.0");
   });
+
+  // ADR-0082: preserved workspace:* deps pin to ^<sourceVersion> instead of *
+  async function writeSourcePkg(srcRoot: string, dir: string, name: string, version: string) {
+    const pkgDir = path.join(srcRoot, "packages", dir);
+    await mkdir(pkgDir, { recursive: true });
+    await writeFile(path.join(pkgDir, "package.json"), JSON.stringify({ name, version }, null, 2));
+  }
+
+  it("pins preserved workspace:* dependency to ^<sourceVersion>", async () => {
+    const srcRoot = await mkdtemp();
+    await writeSourcePkg(srcRoot, "sibling", "@warpgogol/sibling", "1.2.3");
+
+    const pkg = {
+      name: "@warpgogol/test",
+      dependencies: { "@warpgogol/sibling": "workspace:*" },
+    };
+    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+
+    const config: ExtractConfig = { ...baseConfig, preservePackages: ["@warpgogol/sibling"] };
+    await fixStandalonePackageJson(tmpDir, config, "pnpm", srcRoot);
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    expect(result.dependencies["@warpgogol/sibling"]).toBe("^1.2.3");
+
+    await rm(srcRoot, { recursive: true, force: true });
+  });
+
+  it("keeps * for non-preserved workspace:* dependency even with root", async () => {
+    const srcRoot = await mkdtemp();
+    await writeSourcePkg(srcRoot, "sibling", "@warpgogol/sibling", "1.2.3");
+
+    const pkg = {
+      name: "@warpgogol/test",
+      dependencies: { zod: "workspace:*" },
+    };
+    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+
+    await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm", srcRoot);
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    expect(result.dependencies.zod).toBe("*");
+
+    await rm(srcRoot, { recursive: true, force: true });
+  });
+
+  it("pins preserved workspace:* peerDependency to ^<sourceVersion>", async () => {
+    const srcRoot = await mkdtemp();
+    await writeSourcePkg(srcRoot, "sibling", "@warpgogol/sibling", "1.2.3");
+
+    const pkg = {
+      name: "@warpgogol/test",
+      peerDependencies: { "@warpgogol/sibling": "workspace:*" },
+    };
+    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+
+    const config: ExtractConfig = { ...baseConfig, preservePackages: ["@warpgogol/sibling"] };
+    await fixStandalonePackageJson(tmpDir, config, "pnpm", srcRoot);
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    expect(result.peerDependencies["@warpgogol/sibling"]).toBe("^1.2.3");
+
+    await rm(srcRoot, { recursive: true, force: true });
+  });
+
+  it("falls back to * when the preserved dep is not found in the source monorepo", async () => {
+    const srcRoot = await mkdtemp();
+    await mkdir(path.join(srcRoot, "packages"), { recursive: true });
+
+    const pkg = {
+      name: "@warpgogol/test",
+      dependencies: { "@warpgogol/sibling": "workspace:*" },
+    };
+    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+
+    const config: ExtractConfig = { ...baseConfig, preservePackages: ["@warpgogol/sibling"] };
+    await fixStandalonePackageJson(tmpDir, config, "pnpm", srcRoot);
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    expect(result.dependencies["@warpgogol/sibling"]).toBe("*");
+
+    await rm(srcRoot, { recursive: true, force: true });
+  });
+
+  it("falls back to * when root is not provided", async () => {
+    const pkg = {
+      name: "@warpgogol/test",
+      dependencies: { "@warpgogol/sibling": "workspace:*" },
+    };
+    await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+
+    const config: ExtractConfig = { ...baseConfig, preservePackages: ["@warpgogol/sibling"] };
+    await fixStandalonePackageJson(tmpDir, config, "pnpm");
+
+    const result = JSON.parse(await readFile(path.join(tmpDir, "package.json"), "utf-8"));
+    expect(result.dependencies["@warpgogol/sibling"]).toBe("*");
+  });
 });
 
 describe("bumpSourceVersion", () => {

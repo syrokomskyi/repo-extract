@@ -7,6 +7,7 @@
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>Ported discoverPackageDeps from scripts/export-clients-helpers.ts for RFC-0070. Supports both @syrokomskyi/ and @warpgogol/ prefixes.</item>
+  <item>ADR-0082: added resolveSourceVersion — reads a workspace package's version from the source monorepo so preserved deps can be pinned to ^&lt;sourceVersion&gt;.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -102,6 +103,18 @@ async function resolveAppDeps(
     }
   } catch {
     /* no-op */
+  }
+}
+
+export async function resolveSourceVersion(root: string, pkgName: string): Promise<string | null> {
+  const pkgDir = await findPackageDir(root, pkgName);
+  if (!pkgDir) return null;
+  try {
+    const raw = await readFile(path.join(pkgDir, "package.json"), "utf-8");
+    const pkg = JSON.parse(raw);
+    return typeof pkg.version === "string" && pkg.version.length > 0 ? pkg.version : null;
+  } catch {
+    return null;
   }
 }
 

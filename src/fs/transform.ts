@@ -11,6 +11,7 @@
   <item>RFC-0071: Replaced hardcoded org-specific values with config-driven options (stripScopes, preservePackages, rootPackageName, customConditions, onlyBuiltDependencies, packageManager, gitignoreMode).</item>
   <item>RFC-0072: Parameterized buildRootPackageJson, generateRootFiles, generateCiWorkflow, fixStandalonePackageJson for pnpm/npm/yarn support.</item>
   <item>Fix: Split generateCiWorkflow into ci + publish jobs — publish only on push to main, with registry-url for NODE_AUTH_TOKEN.</item>
+  <item>ADR-0082: preservePackages workspace:* deps now pin to ^<sourceVersion> instead of * — extracted lockfiles resolve the just-published sibling under pnpm minimumReleaseAge.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -21,6 +22,7 @@ import type { Dirent } from "node:fs";
 import type { ExtractConfig, PackageManager, CiConfig } from "../types.js";
 import type { Logger } from "../log.js";
 import { isIgnored } from "./copy.js";
+import { resolveSourceVersion } from "./discover.js";
 
 export async function transformPackageJson(
   dest: string,
@@ -681,7 +683,7 @@ export async function fixStandalonePackageJson(
       for (const key of Object.keys(pkg[depField])) {
         if (depField === "peerDependencies") {
           if (pkg[depField][key] === "workspace:*") {
-            pkg[depField][key] = "*";
+            pkg[depField][key] = await rewriteWorkspaceSpecifier(key, preservePackages, root);
             changed = true;
           }
         } else {
@@ -691,7 +693,7 @@ export async function fixStandalonePackageJson(
             delete pkg[depField][key];
             changed = true;
           } else if (pkg[depField][key] === "workspace:*") {
-            pkg[depField][key] = "*";
+            pkg[depField][key] = await rewriteWorkspaceSpecifier(key, preservePackages, root);
             changed = true;
           }
         }
@@ -716,6 +718,16 @@ export async function fixStandalonePackageJson(
       "  fixed standalone package.json (test script, workspace deps, packageManager)",
     );
   }
+}
+
+async function rewriteWorkspaceSpecifier(
+  depName: string,
+  preservePackages: string[],
+  root?: string,
+): Promise<string> {
+  if (!root || !preservePackages.includes(depName)) return "*";
+  const version = await resolveSourceVersion(root, depName);
+  return version ? `^${version}` : "*";
 }
 
 export async function fixStandaloneVitestConfig(dest: string, logger?: Logger): Promise<void> {

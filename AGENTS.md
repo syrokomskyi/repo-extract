@@ -49,4 +49,18 @@ This is a **package** workspace. Expose stable typed APIs. Do not import from ap
 
 In standalone exports, `fixStandalonePackageJson` rewrites `workspace:*` specifiers: packages listed in `preservePackages` are pinned to `^<sourceVersion>` resolved from the source monorepo via `resolveSourceVersion` (`src/fs/discover.ts`); everything else falls back to `*`. This keeps extracted lockfiles resolving the just-published sibling under pnpm `minimumReleaseAge`.
 
+## Push after history transfer
+
+`transferGitHistory` replaces the destination repo's `.git` with the filtered monorepo history, so the first push after export is always non-fast-forward against the remote's old export-snapshot history (unrelated histories). Resolve with:
+
+```bash
+git fetch origin && git merge -s ours --allow-unrelated-histories origin/main -m "merge: unify exported tree with remote export history" && git push -u origin main
+```
+
+The exported tree is authoritative — never rebase onto remote export snapshots. Before merging, check `git log main..origin/main` for remote-only functional commits and port them back to the monorepo first.
+
+## Working tree is exported, not HEAD
+
+`copyFiltered` copies files from disk — uncommitted working-tree changes ship in the export. Commit or stash before running the CLI if export hygiene matters.
+
 See the root `AGENTS.md` for project-wide rules, skills, and capabilities.

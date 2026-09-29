@@ -59,6 +59,8 @@ git fetch origin && git merge -s ours --allow-unrelated-histories origin/main -m
 
 The exported tree is authoritative — never rebase onto remote export snapshots. Before merging, check `git log main..origin/main` for remote-only functional commits and port them back to the monorepo first.
 
+Set `git.history: false` in `extract.config.yaml` to skip history transfer entirely — the destination keeps its own snapshot history, commits land as plain snapshots, and pushes stay fast-forward. Prefer it for large monorepos: the clone + `filter-branch` rewrite over all commits dominates export time. `apps/hdri/extract.config.yaml` uses this.
+
 ## Working tree is exported, not HEAD
 
 `copyFiltered` copies files from disk — uncommitted working-tree changes ship in the export. Commit or stash before running the CLI if export hygiene matters.

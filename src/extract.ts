@@ -376,10 +376,16 @@ async function exportMonorepo(
     logger.log("  no secrets found");
   }
 
-  // 15c. Transfer git history
-  const pathPrefixes = [config.projectDir, ...config.appDirs];
-  emit({ phase: "gitHistory", pathPrefixes });
-  await transferGitHistory(root, dest, pathPrefixes, logger);
+  // 15c. Transfer git history (skip when git.history is false — keeps
+  // the destination's own history and avoids the clone + filter-branch
+  // rewrite, which dominates export time on large monorepos)
+  if (config.git?.history !== false) {
+    const pathPrefixes = [config.projectDir, ...config.appDirs];
+    emit({ phase: "gitHistory", pathPrefixes });
+    await transferGitHistory(root, dest, pathPrefixes, logger);
+  } else {
+    logger.log("Skipping git history transfer (git.history: false)");
+  }
 
   // 16. Git commit + push
   emit({ phase: "gitCommit", message: changelogCommitMessage });

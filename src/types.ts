@@ -66,6 +66,13 @@ export type PostProcessRule = CopyRule | PatchRule | DeleteRule;
 export interface GitConfig {
   remote?: string;
   autoPush?: boolean;
+  /**
+   * Transfer filtered monorepo git history into the destination repo.
+   * Default: true. Set false to keep the destination's existing history
+   * and commit plain snapshots — skips the full clone + filter-branch
+   * rewrite, which dominates export time on large monorepos.
+   */
+  history?: boolean;
 }
 
 export interface ExtractConfig {

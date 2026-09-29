@@ -22,6 +22,7 @@ import type { ExtractConfig } from "./types.js";
 const GitConfigSchema = z.object({
   remote: z.string().optional(),
   autoPush: z.boolean().optional(),
+  history: z.boolean().optional(),
 });
 
 const CopyRuleSchema = z.object({

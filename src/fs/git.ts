@@ -134,6 +134,16 @@ export async function commitExport(
           error(`  push rejected (non-fast-forward) — reconciling via merge -s ours`);
           try {
             execFileSync("git", ["fetch", "origin"], { cwd: dest, stdio: "pipe" });
+            try {
+              execFileSync("git", ["merge-base", "HEAD", `origin/${branch}`], {
+                cwd: dest,
+                stdio: "pipe",
+              });
+            } catch {
+              error(
+                `  warning: no merge base — remote history is unrelated to this export; grafting via ours-merge (local tree stays authoritative)`,
+              );
+            }
             execFileSync(
               "git",
               [

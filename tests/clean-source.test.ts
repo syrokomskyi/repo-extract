@@ -295,6 +295,26 @@ describe("extractProject clean-source modes", () => {
     ).rejects.toThrow(GitOperationError);
   });
 
+  it("aborts on dirt in the tsconfig `extends` target outside projectDir", async () => {
+    gitInit(tmpRoot);
+    await seedPackage(tmpRoot, "export const v = 1;\n");
+    await mkdir(path.join(tmpRoot, "tsconfig"), { recursive: true });
+    await writeFile(
+      path.join(tmpRoot, "tsconfig/node-lib.json"),
+      '{"compilerOptions":{"strict":true}}\n',
+    );
+    await writeFile(
+      path.join(tmpRoot, "packages/my-pkg/tsconfig.json"),
+      '{"extends":"../../tsconfig/node-lib.json"}\n',
+    );
+    gitCommitAll(tmpRoot, "init");
+    await writeFile(path.join(tmpRoot, "tsconfig/node-lib.json"), '{"compilerOptions":{}}\n');
+
+    await expect(
+      withCwd(tmpRoot, () => extractProject(baseConfig, { dest: tmpDest })),
+    ).rejects.toThrow(GitOperationError);
+  });
+
   it("emits an error progress event when --ref cannot be resolved", async () => {
     gitInit(tmpRoot);
     await seedPackage(tmpRoot, "export const v = 1;\n");

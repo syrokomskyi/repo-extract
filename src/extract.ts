@@ -120,8 +120,10 @@ export async function extractProject(
   // RFC-0131: the export reads more than projectDir — declared copy/app/package
   // dirs, root-level config/ecosystem files (explicit or the pm-derived
   // defaults), batch data, postProcess copy sources, and implicit root inputs
-  // (package.json for version detection, tsconfig.base.json via tsconfig
-  // `extends`, lockfiles for pm detection, preserved packages' manifests).
+  // (package.json for version detection, tsconfig `extends` targets inlined by
+  // fixStandaloneTsconfig, lockfiles for pm detection, preserved packages'
+  // manifests). The standalone predicate must match the dispatch below.
+  const isStandaloneExport = config.standalone || config.projectDir.startsWith("packages/");
   const pm = config.packageManager ?? detectPackageManager(realRoot, logger);
   const preflightDirs = [
     config.projectDir,
@@ -130,18 +132,17 @@ export async function extractProject(
     "pnpm-lock.yaml",
     "package-lock.json",
     "yarn.lock",
-    "bun.lock",
-    "bun.lockb",
     ...(config.copyDirs ?? []),
     ...(config.appDirs ?? []),
-    ...(config.packageDirs ?? (config.standalone ? [] : ["packages"])),
+    ...(config.packageDirs ?? (isStandaloneExport ? [] : ["packages"])),
     // Standalone exports never copy monorepo config files — only the
     // monorepo-mode defaults (or an explicit override) are checked.
-    ...(config.standalone ? [] : (config.monorepoConfigFiles ?? getMonorepoConfigFiles(pm))),
+    ...(isStandaloneExport ? [] : (config.monorepoConfigFiles ?? getMonorepoConfigFiles(pm))),
     ...(config.aiEcosystemFiles ?? []),
     ...(config.batchDataDir ? [config.batchDataDir] : []),
     ...(config.postProcess ?? []).filter((r) => r.action === "copy").map((r) => r.from),
     ...(config.preservePackages?.length ? ["packages/*/package.json"] : []),
+    ...tsconfigExtendsTargets(realRoot, config.projectDir),
   ];
 
   logger.log(`Exporting ${config.destName} to ${destBase}...`);
@@ -153,7 +154,7 @@ export async function extractProject(
     logger.log("=== Dry run — no files will be written ===");
     logger.log(`  projectDir: ${config.projectDir}`);
     logger.log(`  destName: ${config.destName}`);
-    logger.log(`  standalone: ${config.standalone}`);
+    logger.log(`  standalone: ${isStandaloneExport}`);
     logger.log(`  source mode: ${fromHead ? `head (${options.ref ?? "HEAD"})` : "worktree"}`);
     logger.log(`  allowDirty: ${allowDirty}`);
     logger.log(`  appDirs: ${config.appDirs.join(", ") || "(none)"}`);
@@ -169,7 +170,7 @@ export async function extractProject(
     }
     const result: ExtractResult = {
       dest,
-      mode: config.standalone ? "standalone" : "monorepo",
+      mode: isStandaloneExport ? "standalone" : "monorepo",
       filesCopied: 0,
       packagesCopied: 0,
       gitCommitted: false,
@@ -207,7 +208,7 @@ export async function extractProject(
       root = wt.dir;
       cleanup = wt.cleanup;
     }
-    if (config.standalone || config.projectDir.startsWith("packages/")) {
+    if (isStandaloneExport) {
       return await exportStandalonePackage(root, dest, effectiveConfig, logger, emit);
     } else {
       return await exportMonorepo(root, dest, effectiveConfig, logger, emit);
@@ -218,6 +219,32 @@ export async function extractProject(
   } finally {
     await cleanup?.();
   }
+}
+
+/**
+ * RFC-0131: resolve the repo-relative tsconfig `extends` targets the standalone
+ * inline step reads (`fixStandaloneTsconfig` resolves one hop relative to
+ * projectDir/tsconfig.json). Package presets (@tsconfig/…) and paths outside
+ * the repo are skipped — they are not working-tree content.
+ */
+function tsconfigExtendsTargets(root: string, projectDir: string): string[] {
+  const tsconfigPath = path.join(root, projectDir, "tsconfig.json");
+  let extendsValue: unknown;
+  try {
+    extendsValue = JSON.parse(readFileSync(tsconfigPath, "utf-8"))?.extends;
+  } catch {
+    return [];
+  }
+  const targets = Array.isArray(extendsValue) ? extendsValue : [extendsValue];
+  const out: string[] = [];
+  for (const t of targets) {
+    if (typeof t !== "string" || (!t.startsWith(".") && !t.startsWith("/"))) continue;
+    let resolved = path.resolve(path.dirname(tsconfigPath), t);
+    if (!resolved.endsWith(".json")) resolved += ".json";
+    const rel = path.relative(root, resolved);
+    if (!rel.startsWith("..") && !path.isAbsolute(rel)) out.push(rel);
+  }
+  return out;
 }
 
 async function exportMonorepo(

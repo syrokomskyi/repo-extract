@@ -57,6 +57,8 @@ npx @warpgogol/repo-extract --config extract.config.yaml --dry-run
 
 By default, `repo-extract` aborts when the exported directories carry uncommitted changes — a release must never silently include stray WIP. Pass `--allow-dirty` to opt out explicitly, or `--from-head`/`--ref` to export committed content only: the tool materializes a temporary `git worktree` at the ref, copies from it, and removes it afterward. `versionBump` cannot combine with `--from-head` — bump and commit the source first, then export the bumped revision.
 
+The preflight checks every source path the export reads — declared `copyDirs`/`appDirs`/`packageDirs`, root inputs (`package.json`, `tsconfig.base.json`, lockfiles, the `extends` target of `projectDir/tsconfig.json`), monorepo config defaults in monorepo mode, and `packages/*/package.json` when `preservePackages` is used. Gitignored files are invisible to it; `--from-head` is the airtight path. Note: `extract.config.yaml` itself is still loaded from the ambient working tree — keep it committed and clean for release exports.
+
 ## Configuration
 
 Create an `extract.config.yaml` in your project:

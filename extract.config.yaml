@@ -36,5 +36,8 @@ postProcess:
 git:
   remote: git@github.com:syrokomskyi/repo-extract.git
   autoPush: true
+  # RFC-0131: the standalone remote accumulates reconcile commits, so each
+  # export's rewritten history diverges — reconcile automatically.
+  autoReconcile: true
 
 skipSecretScan: true

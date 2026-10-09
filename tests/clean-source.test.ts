@@ -282,6 +282,38 @@ describe("extractProject clean-source modes", () => {
     expect(log).toContain("init my-pkg");
   });
 
+  it("aborts on dirt in implicit root inputs (tsconfig.base.json)", async () => {
+    gitInit(tmpRoot);
+    await seedPackage(tmpRoot, "export const v = 1;\n");
+    gitCommitAll(tmpRoot, "init");
+    // Standalone transforms read the root tsconfig.base.json via `extends`;
+    // dirt there leaks into the export, so the preflight must cover it.
+    await writeFile(path.join(tmpRoot, "tsconfig.base.json"), '{"compilerOptions":{}}\n');
+
+    await expect(
+      withCwd(tmpRoot, () => extractProject(baseConfig, { dest: tmpDest })),
+    ).rejects.toThrow(GitOperationError);
+  });
+
+  it("emits an error progress event when --ref cannot be resolved", async () => {
+    gitInit(tmpRoot);
+    await seedPackage(tmpRoot, "export const v = 1;\n");
+    gitCommitAll(tmpRoot, "init");
+
+    const events: string[] = [];
+    await expect(
+      withCwd(tmpRoot, () =>
+        extractProject(baseConfig, {
+          dest: tmpDest,
+          ref: "refs/heads/does-not-exist",
+          onProgress: (e) => events.push(e.phase),
+        }),
+      ),
+    ).rejects.toThrow(GitOperationError);
+    expect(events).toContain("start");
+    expect(events).toContain("error");
+  });
+
   it("commits without pushing when noPush overrides git.autoPush", async () => {
     await mkdir(tmpRemote, { recursive: true });
     execSync("git init --bare -b main", { cwd: tmpRemote, stdio: "pipe" });
@@ -377,5 +409,28 @@ describe("commitExport push reconciliation", () => {
     expect(result.committed).toBe(true);
     expect(result.pushed).toBe(false);
     await rm(other, { recursive: true, force: true });
+  });
+
+  it("does not reconcile on non-non-ff failures (no ours-merge commit)", async () => {
+    // A dead remote path fails the push without any fast-forward wording —
+    // the reconcile gate must not fire.
+    const deadRemote = path.join(os.tmpdir(), "repo-extract-cs-no-such-remote");
+
+    gitInit(tmpDest);
+    await writeFile(path.join(tmpDest, "a.txt"), "export-a\n");
+    const logger = { log: () => {}, error: () => {} };
+    const result = await commitExport(
+      tmpDest,
+      "export 1",
+      { remote: deadRemote, autoPush: true, autoReconcile: true },
+      logger,
+    );
+    expect(result.committed).toBe(true);
+    expect(result.pushed).toBe(false);
+    const merges = execSync("git log --merges --oneline", {
+      cwd: tmpDest,
+      encoding: "utf-8",
+    }).trim();
+    expect(merges).toBe("");
   });
 });

@@ -117,19 +117,31 @@ export async function extractProject(
     config.destBase ?? (config.projectDir.startsWith("packages/") ? "packages" : "exports");
   const dest = options.dest ?? path.resolve(realRoot, "..", destBase, config.destName);
 
-  // RFC-0131: every source path the export copies from — projectDir, declared
-  // copy/app/package dirs, root-level config/ecosystem files, batch data, and
-  // postProcess copy sources. Monorepo exports without explicit packageDirs
-  // auto-discover packages/*, so the packages root is checked too.
+  // RFC-0131: the export reads more than projectDir — declared copy/app/package
+  // dirs, root-level config/ecosystem files (explicit or the pm-derived
+  // defaults), batch data, postProcess copy sources, and implicit root inputs
+  // (package.json for version detection, tsconfig.base.json via tsconfig
+  // `extends`, lockfiles for pm detection, preserved packages' manifests).
+  const pm = config.packageManager ?? detectPackageManager(realRoot, logger);
   const preflightDirs = [
     config.projectDir,
+    "package.json",
+    "tsconfig.base.json",
+    "pnpm-lock.yaml",
+    "package-lock.json",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
     ...(config.copyDirs ?? []),
     ...(config.appDirs ?? []),
     ...(config.packageDirs ?? (config.standalone ? [] : ["packages"])),
-    ...(config.monorepoConfigFiles ?? []),
+    // Standalone exports never copy monorepo config files — only the
+    // monorepo-mode defaults (or an explicit override) are checked.
+    ...(config.standalone ? [] : (config.monorepoConfigFiles ?? getMonorepoConfigFiles(pm))),
     ...(config.aiEcosystemFiles ?? []),
     ...(config.batchDataDir ? [config.batchDataDir] : []),
     ...(config.postProcess ?? []).filter((r) => r.action === "copy").map((r) => r.from),
+    ...(config.preservePackages?.length ? ["packages/*/package.json"] : []),
   ];
 
   logger.log(`Exporting ${config.destName} to ${destBase}...`);
@@ -150,7 +162,7 @@ export async function extractProject(
     }
     if (!fromHead && !allowDirty) {
       try {
-        assertCleanSource(realRoot, preflightDirs);
+        assertCleanSource(realRoot, preflightDirs, logger);
       } catch (err) {
         logger.log(`  dirty sources — a real export would abort: ${(err as Error).message}`);
       }
@@ -188,14 +200,13 @@ export async function extractProject(
     : config;
 
   let cleanup: (() => Promise<void>) | undefined;
-  let root = realRoot;
-  if (fromHead) {
-    const wt = await materializeHeadWorktree(realRoot, options.ref ?? "HEAD", logger);
-    root = wt.dir;
-    cleanup = wt.cleanup;
-  }
-
   try {
+    let root = realRoot;
+    if (fromHead) {
+      const wt = await materializeHeadWorktree(realRoot, options.ref ?? "HEAD", logger);
+      root = wt.dir;
+      cleanup = wt.cleanup;
+    }
     if (config.standalone || config.projectDir.startsWith("packages/")) {
       return await exportStandalonePackage(root, dest, effectiveConfig, logger, emit);
     } else {

@@ -125,7 +125,7 @@ export async function commitExport(
           pushed = true;
         } else if (
           gitConfig.autoReconcile &&
-          /non-fast-forward|\(fetch first\)|\[rejected\]/i.test(attempt.stderr)
+          /non-fast-forward|\(fetch first\)/i.test(attempt.stderr)
         ) {
           // RFC-0131: opt-in reconcile — fetch + merge -s ours + retry once.
           // Fires only on non-fast-forward rejections; auth/hook/transient
@@ -140,6 +140,7 @@ export async function commitExport(
                 "merge",
                 "-s",
                 "ours",
+                "--allow-unrelated-histories",
                 `origin/${branch}`,
                 "-m",
                 "merge: reconcile remote export history (local tree is authoritative export)",

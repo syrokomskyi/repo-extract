@@ -13,6 +13,7 @@
   <item>RFC-0074: Replaced process.exit(1) with SecretScanError. Changed return type to Promise<ExtractResult>. Added progress events, logger, PackageManagerError wrapping.</item>
   <item>RFC-0075: Consolidated all inline await import("node:fs*") to top-level static imports.</item>
   <item>Fix: Added lockfile generation to exportStandalonePackage — standalone packages need lockfiles for --frozen-lockfile in CI.</item>
+  <item>RFC-0131: Clean-source extraction — dirty preflight via assertCleanSource, --from-head/--ref via materializeHeadWorktree, versionBump×head conflict rejection, --no-push autoPush override.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -28,7 +29,7 @@ import type {
   ExtractProgressEvent,
   PackageManager,
 } from "./types.js";
-import { SecretScanError, PackageManagerError } from "./errors.js";
+import { SecretScanError, PackageManagerError, GitOperationError } from "./errors.js";
 import { createLogger } from "./log.js";
 import type { Logger } from "./log.js";
 import {
@@ -57,7 +58,12 @@ import {
 } from "./fs/transform.js";
 import { discoverPackageDeps } from "./fs/discover.js";
 import { runPostProcess } from "./postprocess/index.js";
-import { commitExport, transferGitHistory } from "./fs/git.js";
+import {
+  assertCleanSource,
+  commitExport,
+  materializeHeadWorktree,
+  transferGitHistory,
+} from "./fs/git.js";
 import { tryGenerateChangelog } from "./changelog.js";
 import { scanForSecrets } from "./scan.js";
 import { detectPackageManager } from "./package-manager.js";
@@ -68,12 +74,32 @@ export async function extractProject(
   config: ExtractConfig,
   options: ExtractOptions = {},
 ): Promise<ExtractResult> {
-  const root = process.cwd();
-  const destBase =
-    config.destBase ?? (config.projectDir.startsWith("packages/") ? "packages" : "exports");
-  const dest = options.dest ?? path.resolve(root, "..", destBase, config.destName);
+  const realRoot = process.cwd();
   const logger = createLogger(options.verbose);
   const onProgress = options.onProgress;
+
+  // RFC-0131: clean-source resolution. --ref implies from-head; config
+  // source: "head" is equivalent. The dest default must resolve against the
+  // real cwd, never the materialized worktree.
+  const fromHead = options.fromHead || Boolean(options.ref) || config.source === "head";
+  const allowDirty = options.allowDirty ?? config.allowDirty ?? false;
+
+  if (fromHead && allowDirty) {
+    throw new GitOperationError(
+      "preflight",
+      "--allow-dirty cannot be combined with --from-head/--ref (head exports are clean by construction)",
+    );
+  }
+  if (fromHead && config.versionBump) {
+    throw new GitOperationError(
+      "preflight",
+      "versionBump cannot run under --from-head/--ref: the bump would land in a disposable worktree and drift source vs export — bump and commit the source first, then export the bumped revision",
+    );
+  }
+
+  const destBase =
+    config.destBase ?? (config.projectDir.startsWith("packages/") ? "packages" : "exports");
+  const dest = options.dest ?? path.resolve(realRoot, "..", destBase, config.destName);
 
   const emit = (event: ExtractProgressEvent) => {
     try {
@@ -83,8 +109,17 @@ export async function extractProject(
     }
   };
 
+  // RFC-0131: fail-closed dirty preflight on the live working tree.
+  if (!fromHead && !allowDirty) {
+    assertCleanSource(
+      realRoot,
+      [config.projectDir, ...(config.copyDirs ?? []), ...(config.appDirs ?? [])],
+      logger,
+    );
+  }
+
   logger.log(`Exporting ${config.destName} to ${destBase}...`);
-  logger.log(`  source: ${root}`);
+  logger.log(`  source: ${realRoot}${fromHead ? ` (worktree @ ${options.ref ?? "HEAD"})` : ""}`);
   logger.log(`  dest:   ${dest}`);
   logger.log("");
 
@@ -93,6 +128,8 @@ export async function extractProject(
     logger.log(`  projectDir: ${config.projectDir}`);
     logger.log(`  destName: ${config.destName}`);
     logger.log(`  standalone: ${config.standalone}`);
+    logger.log(`  source mode: ${fromHead ? `head (${options.ref ?? "HEAD"})` : "worktree"}`);
+    logger.log(`  allowDirty: ${allowDirty}`);
     logger.log(`  appDirs: ${config.appDirs.join(", ") || "(none)"}`);
     if (config.postProcess) {
       logger.log(`  postProcess rules: ${config.postProcess.length}`);
@@ -113,15 +150,30 @@ export async function extractProject(
 
   emit({ phase: "start", config, dest });
 
+  // --no-push overrides git.autoPush for this run (RFC-0131).
+  const effectiveConfig: ExtractConfig = options.noPush
+    ? { ...config, git: { ...config.git, autoPush: false } }
+    : config;
+
+  let cleanup: (() => Promise<void>) | undefined;
+  let root = realRoot;
+  if (fromHead) {
+    const wt = await materializeHeadWorktree(realRoot, options.ref ?? "HEAD", logger);
+    root = wt.dir;
+    cleanup = wt.cleanup;
+  }
+
   try {
     if (config.standalone || config.projectDir.startsWith("packages/")) {
-      return await exportStandalonePackage(root, dest, config, logger, emit);
+      return await exportStandalonePackage(root, dest, effectiveConfig, logger, emit);
     } else {
-      return await exportMonorepo(root, dest, config, logger, emit);
+      return await exportMonorepo(root, dest, effectiveConfig, logger, emit);
     }
   } catch (err) {
     emit({ phase: "error", error: err instanceof Error ? err : new Error(String(err)) });
     throw err;
+  } finally {
+    await cleanup?.();
   }
 }
 

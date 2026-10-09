@@ -10,6 +10,7 @@
   <item>RFC-0073: replaced all execSync with execFileSync (argument arrays) to eliminate shell injection.</item>
   <item>RFC-0074: Wrapped execFileSync calls with GitOperationError. Changed commitExport return to { committed, pushed }.</item>
   <item>RFC-0075: Added Windows multi-prefix guard in transferGitHistory().</item>
+  <item>RFC-0131: Added assertCleanSource (dirty preflight), materializeHeadWorktree (--from-head), and git.autoReconcile ours-merge retry in commitExport.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -111,9 +112,42 @@ export async function commitExport(
           log(`  pushed to origin/${branch}`);
           pushed = true;
         } catch (pushErr) {
-          error(`  push rejected: ${pushErr instanceof Error ? pushErr.message : pushErr}`);
-          error("  remote has diverged — commit is saved locally.");
-          error("  resolve manually: pull remote changes, merge, then push.");
+          // RFC-0131: opt-in reconcile — fetch + merge -s ours + retry once.
+          // The local tree is the authoritative export; remote history is
+          // preserved through the merge, its tree state is not adopted.
+          if (gitConfig.autoReconcile) {
+            error(`  push rejected — reconciling via merge -s ours (local tree authoritative)`);
+            try {
+              execFileSync("git", ["fetch", "origin"], { cwd: dest, stdio: "pipe" });
+              execFileSync(
+                "git",
+                [
+                  "merge",
+                  "-s",
+                  "ours",
+                  `origin/${branch}`,
+                  "-m",
+                  "merge: reconcile remote export history (local tree is authoritative export)",
+                ],
+                { cwd: dest, stdio: "inherit" },
+              );
+              execFileSync("git", ["push", "-u", "origin", branch], {
+                cwd: dest,
+                stdio: "inherit",
+              });
+              log(`  pushed to origin/${branch} after reconcile`);
+              pushed = true;
+            } catch (reconcileErr) {
+              error(
+                `  reconcile failed: ${reconcileErr instanceof Error ? reconcileErr.message : reconcileErr}`,
+              );
+              error("  commit is saved locally — resolve manually, then push.");
+            }
+          } else {
+            error(`  push rejected: ${pushErr instanceof Error ? pushErr.message : pushErr}`);
+            error("  remote has diverged — commit is saved locally.");
+            error("  resolve manually: pull remote changes, merge, then push.");
+          }
         }
       } catch (pushErr) {
         error(`  push failed: ${pushErr instanceof Error ? pushErr.message : pushErr}`);
@@ -125,6 +159,93 @@ export async function commitExport(
     log("  git commit skipped (not a git repository or no changes)");
   }
   return { committed, pushed };
+}
+
+/**
+ * RFC-0131: fail-closed dirty-source preflight. Throws GitOperationError when
+ * any of the given repo-relative dirs carries uncommitted changes (modified,
+ * staged, or untracked) in the source checkout rooted at `root`.
+ */
+export function assertCleanSource(root: string, dirs: string[], logger?: Logger): void {
+  const log = logger?.log ?? console.log;
+  try {
+    execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: root, stdio: "pipe" });
+  } catch {
+    // Not a git checkout — there is no HEAD to be dirty against; skip.
+    return;
+  }
+  for (const dir of dirs) {
+    let status: string;
+    try {
+      status = execFileSync("git", ["status", "--porcelain", "--", dir], {
+        cwd: root,
+        stdio: "pipe",
+      })
+        .toString()
+        .trim();
+    } catch (err) {
+      throw new GitOperationError(
+        "preflight",
+        `git status failed for "${dir}": ${err instanceof Error ? err.message : String(err)}`,
+        err instanceof Error ? err : undefined,
+      );
+    }
+    if (!status) continue;
+    const lines = status.split("\n").slice(0, 20);
+    const suffix = status.split("\n").length > 20 ? " …" : "";
+    log(`  preflight: uncommitted changes under ${dir}:`);
+    for (const line of lines) log(`    ${line}`);
+    throw new GitOperationError(
+      "preflight",
+      `${dir} has uncommitted changes (${lines.length}${suffix ? "+" : ""} shown): ${lines.join(", ")}${suffix} — commit or pass --allow-dirty`,
+    );
+  }
+}
+
+/**
+ * RFC-0131: materialize a temporary git worktree at `ref` so the export reads
+ * committed content instead of the ambient working tree. Returns the worktree
+ * path plus a cleanup that removes it (`git worktree remove --force`).
+ */
+export async function materializeHeadWorktree(
+  root: string,
+  ref: string,
+  logger?: Logger,
+): Promise<{ dir: string; ref: string; cleanup: () => Promise<void> }> {
+  const log = logger?.log ?? console.log;
+  let sha: string;
+  try {
+    sha = execFileSync("git", ["rev-parse", ref], { cwd: root, stdio: "pipe" }).toString().trim();
+  } catch (err) {
+    throw new GitOperationError(
+      "worktree",
+      `cannot resolve ref "${ref}": ${err instanceof Error ? err.message : String(err)}`,
+      err instanceof Error ? err : undefined,
+    );
+  }
+  const dir = await mkdtemp(path.join(os.tmpdir(), "repo-extract-head-"));
+  try {
+    execFileSync("git", ["worktree", "add", "--detach", dir, sha], { cwd: root, stdio: "pipe" });
+  } catch (err) {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+    throw new GitOperationError(
+      "worktree",
+      `git worktree add failed: ${err instanceof Error ? err.message : String(err)}`,
+      err instanceof Error ? err : undefined,
+    );
+  }
+  log(`  source worktree: ${dir} @ ${sha.slice(0, 9)}`);
+  return {
+    dir,
+    ref: sha,
+    cleanup: async () => {
+      try {
+        execFileSync("git", ["worktree", "remove", "--force", dir], { cwd: root, stdio: "pipe" });
+      } catch {
+        await rm(dir, { recursive: true, force: true }).catch(() => {});
+      }
+    },
+  };
 }
 
 export function getLastExportDate(dest: string): string | null {

@@ -11,6 +11,7 @@
   <item>RFC-0072: Changed packageManager from string to enum. Added CiConfigSchema and ci field.</item>
   <item>RFC-0075: Added excludePathSegments and excludeExtensions fields.</item>
   <item>ADR-0016: Config schema is the single source of truth — all org-specific values are config fields with org-neutral defaults, no behavioral assumptions baked into source code.</item>
+  <item>RFC-0131: Added git.autoReconcile, source, allowDirty fields.</item>
 </CHANGE_SUMMARY>
 */
 
@@ -23,6 +24,9 @@ const GitConfigSchema = z.object({
   remote: z.string().optional(),
   autoPush: z.boolean().optional(),
   history: z.boolean().optional(),
+  // RFC-0131: reconcile a non-fast-forward push via merge -s ours
+  // (local tree is the authoritative export). Off by default.
+  autoReconcile: z.boolean().optional(),
 });
 
 const CopyRuleSchema = z.object({
@@ -103,6 +107,11 @@ const ExtractConfigSchema = z.object({
   excludeExtensions: z.array(z.string()).optional(),
   skipSecretScan: z.boolean().optional(),
   versionBump: z.enum(["patch", "minor", "major"]).optional(),
+  // RFC-0131: "head" exports from a temporary worktree at HEAD; "worktree"
+  // (default) exports the live working tree. allowDirty opts out of the
+  // fail-closed dirty-source preflight.
+  source: z.enum(["worktree", "head"]).optional(),
+  allowDirty: z.boolean().optional(),
 });
 
 export async function loadConfig(configPath: string): Promise<ExtractConfig> {

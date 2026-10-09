@@ -42,12 +42,20 @@ npx @warpgogol/repo-extract --config extract.config.yaml --dry-run
 
 ## CLI flags
 
-| Flag              | Description                                      |
-| ----------------- | ------------------------------------------------ |
-| `--config <path>` | Path to `extract.config.yaml` (required)         |
-| `--dest <path>`   | Destination directory (overrides config default) |
-| `--dry-run`       | Print plan without writing files                 |
-| `--verbose`       | Verbose output                                   |
+| Flag               | Description                                                         |
+| ------------------ | ------------------------------------------------------------------- |
+| `--config <path>`  | Path to `extract.config.yaml` (required)                            |
+| `--dest <path>`    | Destination directory (overrides config default)                    |
+| `--dry-run`        | Print plan without writing files                                    |
+| `--verbose`        | Verbose output                                                      |
+| `--from-head`      | Export HEAD via a temporary worktree (ignores working-tree changes) |
+| `--ref <sha\|ref>` | Export a specific ref (implies `--from-head`)                       |
+| `--allow-dirty`    | Allow exporting with uncommitted changes                            |
+| `--no-push`        | Commit the export locally without pushing                           |
+
+### Clean-source behavior
+
+By default, `repo-extract` aborts when the exported directories carry uncommitted changes — a release must never silently include stray WIP. Pass `--allow-dirty` to opt out explicitly, or `--from-head`/`--ref` to export committed content only: the tool materializes a temporary `git worktree` at the ref, copies from it, and removes it afterward. `versionBump` cannot combine with `--from-head` — bump and commit the source first, then export the bumped revision.
 
 ## Configuration
 
@@ -63,7 +71,10 @@ standalone: true
 git:
   remote: git@github.com:user/my-package.git
   autoPush: true
+  # autoReconcile: true  # on non-fast-forward push: fetch + merge -s ours + retry
 ```
+
+`git.autoReconcile` (default off) automates the established "local tree is the authoritative export" policy: when the destination remote has diverged (e.g. previous export/reconcile commits), the push rejection triggers `fetch` + `merge -s ours` + a single retry instead of failing. Remote history is preserved; its tree state is never merged in. Never force-pushes.
 
 Standalone mode flattens the package to the repo root — `src/`, `tests/`, `package.json`, etc. become top-level. Workspace dependencies (`workspace:*`) are replaced with `*` — except packages listed in `preservePackages`, which are pinned to `^<sourceVersion>` resolved from the source monorepo (ADR-0082). `@warpgogol/*` devDependencies are stripped (except the package itself).
 
@@ -148,6 +159,8 @@ await extractProject(config, { dest: "../my-package" });
 | `scanForSecrets(dir)`                      | Scan a directory for secret patterns         |
 | `transferGitHistory(root, dest, prefixes)` | Transfer filtered git history                |
 | `commitExport(dest, message, gitConfig)`   | Commit and optionally push                   |
+| `assertCleanSource(root, dirs)`            | Fail-closed dirty-source preflight           |
+| `materializeHeadWorktree(root, ref)`       | Temporary clean worktree at a ref            |
 | `diffSummary(...)`                         | Generate diff summary for changes            |
 | `generateCiWorkflow(pm, ci?)`              | Generate a GitHub Actions CI workflow string |
 | `fixStandalonePackageJson(dest)`           | Fix package.json for standalone export       |

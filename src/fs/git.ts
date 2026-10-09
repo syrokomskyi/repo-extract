@@ -82,6 +82,18 @@ export async function commitExport(
       }
     }
 
+    // Deterministic committer identity — hosts without a configured git
+    // identity (CI runners, fresh machines) still produce export commits.
+    try {
+      execFileSync("git", ["config", "user.email"], { cwd: dest, stdio: "pipe" });
+    } catch {
+      execFileSync("git", ["config", "user.email", "repo-extract@localhost"], {
+        cwd: dest,
+        stdio: "pipe",
+      });
+      execFileSync("git", ["config", "user.name", "repo-extract"], { cwd: dest, stdio: "pipe" });
+    }
+
     execFileSync("git", ["add", "-A"], { cwd: dest, stdio: "pipe" });
     const status = execFileSync("git", ["status", "--porcelain"], { cwd: dest, stdio: "pipe" })
       .toString()

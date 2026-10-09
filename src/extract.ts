@@ -78,29 +78,6 @@ export async function extractProject(
   const logger = createLogger(options.verbose);
   const onProgress = options.onProgress;
 
-  // RFC-0131: clean-source resolution. --ref implies from-head; config
-  // source: "head" is equivalent. The dest default must resolve against the
-  // real cwd, never the materialized worktree.
-  const fromHead = options.fromHead || Boolean(options.ref) || config.source === "head";
-  const allowDirty = options.allowDirty ?? config.allowDirty ?? false;
-
-  if (fromHead && allowDirty) {
-    throw new GitOperationError(
-      "preflight",
-      "--allow-dirty cannot be combined with --from-head/--ref (head exports are clean by construction)",
-    );
-  }
-  if (fromHead && config.versionBump) {
-    throw new GitOperationError(
-      "preflight",
-      "versionBump cannot run under --from-head/--ref: the bump would land in a disposable worktree and drift source vs export — bump and commit the source first, then export the bumped revision",
-    );
-  }
-
-  const destBase =
-    config.destBase ?? (config.projectDir.startsWith("packages/") ? "packages" : "exports");
-  const dest = options.dest ?? path.resolve(realRoot, "..", destBase, config.destName);
-
   const emit = (event: ExtractProgressEvent) => {
     try {
       onProgress?.(event);
@@ -108,15 +85,52 @@ export async function extractProject(
       // callback errors are non-fatal
     }
   };
+  const fail = (err: GitOperationError): never => {
+    emit({ phase: "error", error: err });
+    throw err;
+  };
 
-  // RFC-0131: fail-closed dirty preflight on the live working tree.
-  if (!fromHead && !allowDirty) {
-    assertCleanSource(
-      realRoot,
-      [config.projectDir, ...(config.copyDirs ?? []), ...(config.appDirs ?? [])],
-      logger,
+  // RFC-0131: clean-source resolution. --ref implies from-head; config
+  // source: "head" is equivalent. The dest default must resolve against the
+  // real cwd, never the materialized worktree.
+  const fromHead = options.fromHead || Boolean(options.ref) || config.source === "head";
+  const allowDirty = options.allowDirty ?? config.allowDirty ?? false;
+
+  if (fromHead && allowDirty) {
+    fail(
+      new GitOperationError(
+        "preflight",
+        "--allow-dirty cannot be combined with --from-head/--ref (head exports are clean by construction)",
+      ),
     );
   }
+  if (fromHead && config.versionBump) {
+    fail(
+      new GitOperationError(
+        "preflight",
+        "versionBump cannot run under --from-head/--ref: the bump would land in a disposable worktree and drift source vs export — bump and commit the source first, then export the bumped revision",
+      ),
+    );
+  }
+
+  const destBase =
+    config.destBase ?? (config.projectDir.startsWith("packages/") ? "packages" : "exports");
+  const dest = options.dest ?? path.resolve(realRoot, "..", destBase, config.destName);
+
+  // RFC-0131: every source path the export copies from — projectDir, declared
+  // copy/app/package dirs, root-level config/ecosystem files, batch data, and
+  // postProcess copy sources. Monorepo exports without explicit packageDirs
+  // auto-discover packages/*, so the packages root is checked too.
+  const preflightDirs = [
+    config.projectDir,
+    ...(config.copyDirs ?? []),
+    ...(config.appDirs ?? []),
+    ...(config.packageDirs ?? (config.standalone ? [] : ["packages"])),
+    ...(config.monorepoConfigFiles ?? []),
+    ...(config.aiEcosystemFiles ?? []),
+    ...(config.batchDataDir ? [config.batchDataDir] : []),
+    ...(config.postProcess ?? []).filter((r) => r.action === "copy").map((r) => r.from),
+  ];
 
   logger.log(`Exporting ${config.destName} to ${destBase}...`);
   logger.log(`  source: ${realRoot}${fromHead ? ` (worktree @ ${options.ref ?? "HEAD"})` : ""}`);
@@ -134,6 +148,13 @@ export async function extractProject(
     if (config.postProcess) {
       logger.log(`  postProcess rules: ${config.postProcess.length}`);
     }
+    if (!fromHead && !allowDirty) {
+      try {
+        assertCleanSource(realRoot, preflightDirs);
+      } catch (err) {
+        logger.log(`  dirty sources — a real export would abort: ${(err as Error).message}`);
+      }
+    }
     const result: ExtractResult = {
       dest,
       mode: config.standalone ? "standalone" : "monorepo",
@@ -146,6 +167,17 @@ export async function extractProject(
     };
     emit({ phase: "complete", result });
     return result;
+  }
+
+  // RFC-0131: fail-closed dirty preflight on the live working tree — before
+  // any destination mutation.
+  if (!fromHead && !allowDirty) {
+    try {
+      assertCleanSource(realRoot, preflightDirs, logger);
+    } catch (err) {
+      emit({ phase: "error", error: err instanceof Error ? err : new Error(String(err)) });
+      throw err;
+    }
   }
 
   emit({ phase: "start", config, dest });

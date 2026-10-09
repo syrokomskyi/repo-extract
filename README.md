@@ -68,6 +68,9 @@ projectDir: packages/my-package
 destName: my-package
 standalone: true
 
+# source: worktree        # "worktree" (default) or "head" — like --from-head
+# allowDirty: false       # default: abort on uncommitted changes in exported dirs
+
 git:
   remote: git@github.com:user/my-package.git
   autoPush: true

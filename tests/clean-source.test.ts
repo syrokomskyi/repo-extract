@@ -4,11 +4,7 @@ import { execSync, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import {
-  assertCleanSource,
-  commitExport,
-  materializeHeadWorktree,
-} from "../src/fs/git.js";
+import { assertCleanSource, commitExport, materializeHeadWorktree } from "../src/fs/git.js";
 import { GitOperationError } from "../src/errors.js";
 import { extractProject } from "../src/extract.js";
 import type { ExtractConfig } from "../src/types.js";
@@ -211,6 +207,98 @@ describe("extractProject clean-source modes", () => {
         extractProject(baseConfig, { dest: tmpDest, fromHead: true, allowDirty: true }),
       ),
     ).rejects.toThrow(GitOperationError);
+  });
+
+  it("emits an error progress event when the dirty preflight aborts", async () => {
+    gitInit(tmpRoot);
+    await seedPackage(tmpRoot, "export const v = 1;\n");
+    gitCommitAll(tmpRoot, "init");
+    await writeFile(path.join(tmpRoot, "packages/my-pkg/src/index.ts"), "dirty\n");
+
+    const events: string[] = [];
+    await expect(
+      withCwd(tmpRoot, () =>
+        extractProject(baseConfig, {
+          dest: tmpDest,
+          onProgress: (e) => events.push(e.phase),
+        }),
+      ),
+    ).rejects.toThrow(GitOperationError);
+    expect(events).toContain("error");
+  });
+
+  it("covers postProcess copy sources in the dirty preflight", async () => {
+    gitInit(tmpRoot);
+    await seedPackage(tmpRoot, "export const v = 1;\n");
+    await writeFile(path.join(tmpRoot, "seed.txt"), "seed\n");
+    gitCommitAll(tmpRoot, "init");
+    await writeFile(path.join(tmpRoot, "seed.txt"), "dirty\n");
+
+    const config: ExtractConfig = {
+      ...baseConfig,
+      postProcess: [{ action: "copy", from: "seed.txt", to: "seed.txt" }],
+    };
+    await expect(withCwd(tmpRoot, () => extractProject(config, { dest: tmpDest }))).rejects.toThrow(
+      GitOperationError,
+    );
+  });
+
+  it("exports an older --ref commit, not HEAD", async () => {
+    gitInit(tmpRoot);
+    await seedPackage(tmpRoot, "export const v = 1;\n");
+    gitCommitAll(tmpRoot, "v1");
+    const v1Sha = execSync("git rev-parse HEAD", { cwd: tmpRoot, encoding: "utf-8" }).trim();
+    await writeFile(path.join(tmpRoot, "packages/my-pkg/src/index.ts"), "export const v = 2;\n");
+    gitCommitAll(tmpRoot, "v2");
+
+    await withCwd(tmpRoot, () => extractProject(baseConfig, { dest: tmpDest, ref: v1Sha }));
+    const content = await readFile(path.join(tmpDest, "src/index.ts"), "utf-8");
+    expect(content).toBe("export const v = 1;\n");
+  });
+
+  it('honors source: "head" from the config file', async () => {
+    gitInit(tmpRoot);
+    await seedPackage(tmpRoot, "export const v = 1;\n");
+    gitCommitAll(tmpRoot, "init");
+    await writeFile(path.join(tmpRoot, "packages/my-pkg/src/index.ts"), "dirty\n");
+
+    await withCwd(tmpRoot, () =>
+      extractProject({ ...baseConfig, source: "head" }, { dest: tmpDest }),
+    );
+    const content = await readFile(path.join(tmpDest, "src/index.ts"), "utf-8");
+    expect(content).toBe("export const v = 1;\n");
+  });
+
+  it("transfers git history when exporting --from-head", async () => {
+    gitInit(tmpRoot);
+    await seedPackage(tmpRoot, "export const v = 1;\n");
+    gitCommitAll(tmpRoot, "init my-pkg");
+    await writeFile(path.join(tmpRoot, "packages/my-pkg/src/index.ts"), "dirty\n");
+
+    const config: ExtractConfig = { ...baseConfig, git: { history: true } };
+    await withCwd(tmpRoot, () => extractProject(config, { dest: tmpDest, fromHead: true }));
+
+    const log = execSync("git log --oneline", { cwd: tmpDest, encoding: "utf-8" }).trim();
+    expect(log).toContain("init my-pkg");
+  });
+
+  it("commits without pushing when noPush overrides git.autoPush", async () => {
+    await mkdir(tmpRemote, { recursive: true });
+    execSync("git init --bare -b main", { cwd: tmpRemote, stdio: "pipe" });
+    gitInit(tmpRoot);
+    await seedPackage(tmpRoot, "export const v = 1;\n");
+    gitCommitAll(tmpRoot, "init");
+
+    const config: ExtractConfig = {
+      ...baseConfig,
+      git: { remote: tmpRemote, autoPush: true, history: false },
+    };
+    const result = await withCwd(tmpRoot, () =>
+      extractProject(config, { dest: tmpDest, noPush: true }),
+    );
+    expect(result.gitCommitted).toBe(true);
+    expect(result.gitPushed).toBe(false);
+    expect(() => execSync("git rev-parse main", { cwd: tmpRemote, stdio: "pipe" })).toThrow();
   });
 });
 

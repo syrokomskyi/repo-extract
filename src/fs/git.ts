@@ -107,47 +107,63 @@ export async function commitExport(
           log("  skipped (no branch to push)");
           return { committed, pushed };
         }
-        try {
-          execFileSync("git", ["push", "-u", "origin", branch], { cwd: dest, stdio: "inherit" });
+        const tryPush = (): { ok: boolean; stderr: string } => {
+          try {
+            execFileSync("git", ["push", "-u", "origin", branch], { cwd: dest, stdio: "pipe" });
+            return { ok: true, stderr: "" };
+          } catch (e) {
+            const stderr =
+              e instanceof Error && "stderr" in e
+                ? String((e as { stderr?: Buffer | string }).stderr ?? e.message)
+                : String(e);
+            return { ok: false, stderr };
+          }
+        };
+        const attempt = tryPush();
+        if (attempt.ok) {
           log(`  pushed to origin/${branch}`);
           pushed = true;
-        } catch (pushErr) {
+        } else if (
+          gitConfig.autoReconcile &&
+          /non-fast-forward|\(fetch first\)|\[rejected\]/i.test(attempt.stderr)
+        ) {
           // RFC-0131: opt-in reconcile — fetch + merge -s ours + retry once.
-          // The local tree is the authoritative export; remote history is
-          // preserved through the merge, its tree state is not adopted.
-          if (gitConfig.autoReconcile) {
-            error(`  push rejected — reconciling via merge -s ours (local tree authoritative)`);
-            try {
-              execFileSync("git", ["fetch", "origin"], { cwd: dest, stdio: "pipe" });
-              execFileSync(
-                "git",
-                [
-                  "merge",
-                  "-s",
-                  "ours",
-                  `origin/${branch}`,
-                  "-m",
-                  "merge: reconcile remote export history (local tree is authoritative export)",
-                ],
-                { cwd: dest, stdio: "inherit" },
-              );
-              execFileSync("git", ["push", "-u", "origin", branch], {
-                cwd: dest,
-                stdio: "inherit",
-              });
+          // Fires only on non-fast-forward rejections; auth/hook/transient
+          // failures take the manual path. The local tree is the authoritative
+          // export; remote history is preserved, its tree state is not adopted.
+          error(`  push rejected (non-fast-forward) — reconciling via merge -s ours`);
+          try {
+            execFileSync("git", ["fetch", "origin"], { cwd: dest, stdio: "pipe" });
+            execFileSync(
+              "git",
+              [
+                "merge",
+                "-s",
+                "ours",
+                `origin/${branch}`,
+                "-m",
+                "merge: reconcile remote export history (local tree is authoritative export)",
+              ],
+              { cwd: dest, stdio: "inherit" },
+            );
+            const retry = tryPush();
+            if (retry.ok) {
               log(`  pushed to origin/${branch} after reconcile`);
               pushed = true;
-            } catch (reconcileErr) {
-              error(
-                `  reconcile failed: ${reconcileErr instanceof Error ? reconcileErr.message : reconcileErr}`,
-              );
+            } else {
+              error(`  push after reconcile failed: ${retry.stderr.trim().slice(0, 500)}`);
               error("  commit is saved locally — resolve manually, then push.");
             }
-          } else {
-            error(`  push rejected: ${pushErr instanceof Error ? pushErr.message : pushErr}`);
-            error("  remote has diverged — commit is saved locally.");
-            error("  resolve manually: pull remote changes, merge, then push.");
+          } catch (reconcileErr) {
+            error(
+              `  reconcile failed: ${reconcileErr instanceof Error ? reconcileErr.message : reconcileErr}`,
+            );
+            error("  commit is saved locally — resolve manually, then push.");
           }
+        } else {
+          error(`  push rejected: ${attempt.stderr.trim().slice(0, 500)}`);
+          error("  remote has diverged — commit is saved locally.");
+          error("  resolve manually: pull remote changes, merge, then push.");
         }
       } catch (pushErr) {
         error(`  push failed: ${pushErr instanceof Error ? pushErr.message : pushErr}`);
@@ -162,44 +178,58 @@ export async function commitExport(
 }
 
 /**
- * RFC-0131: fail-closed dirty-source preflight. Throws GitOperationError when
- * any of the given repo-relative dirs carries uncommitted changes (modified,
- * staged, or untracked) in the source checkout rooted at `root`.
+ * RFC-0131: collect uncommitted changes (modified, staged, untracked) under the
+ * given repo-relative dirs, grouped by status letter. Returns an empty map for
+ * non-git roots — there is no HEAD to be dirty against.
  */
-export function assertCleanSource(root: string, dirs: string[], logger?: Logger): void {
-  const log = logger?.log ?? console.log;
+export function collectDirtyFiles(root: string, dirs: string[]): Map<string, string[]> {
+  const byStatus = new Map<string, string[]>();
   try {
     execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: root, stdio: "pipe" });
   } catch {
-    // Not a git checkout — there is no HEAD to be dirty against; skip.
-    return;
+    return byStatus;
   }
-  for (const dir of dirs) {
-    let status: string;
-    try {
-      status = execFileSync("git", ["status", "--porcelain", "--", dir], {
-        cwd: root,
-        stdio: "pipe",
-      })
-        .toString()
-        .trim();
-    } catch (err) {
-      throw new GitOperationError(
-        "preflight",
-        `git status failed for "${dir}": ${err instanceof Error ? err.message : String(err)}`,
-        err instanceof Error ? err : undefined,
-      );
-    }
-    if (!status) continue;
-    const lines = status.split("\n").slice(0, 20);
-    const suffix = status.split("\n").length > 20 ? " …" : "";
-    log(`  preflight: uncommitted changes under ${dir}:`);
-    for (const line of lines) log(`    ${line}`);
-    throw new GitOperationError(
-      "preflight",
-      `${dir} has uncommitted changes (${lines.length}${suffix ? "+" : ""} shown): ${lines.join(", ")}${suffix} — commit or pass --allow-dirty`,
-    );
+  const uniqueDirs = [...new Set(dirs.filter(Boolean))];
+  if (!uniqueDirs.length) return byStatus;
+  const out = execFileSync("git", ["status", "--porcelain", "--", ...uniqueDirs], {
+    cwd: root,
+    stdio: "pipe",
+  })
+    .toString()
+    .trim();
+  for (const line of out.split("\n")) {
+    if (!line) continue;
+    const letter = line.slice(0, 2).trim() || "??";
+    const file = line.slice(3);
+    byStatus.set(letter, [...(byStatus.get(letter) ?? []), file]);
   }
+  return byStatus;
+}
+
+const DIRTY_PREFLIGHT_LIMIT = 20;
+
+/**
+ * RFC-0131: fail-closed dirty-source preflight. Throws GitOperationError when
+ * any of the given repo-relative dirs carries uncommitted changes. The offender
+ * list is bounded and grouped by status letter.
+ */
+export function assertCleanSource(root: string, dirs: string[], logger?: Logger): void {
+  const log = logger?.log ?? console.log;
+  const dirty = collectDirtyFiles(root, dirs);
+  if (!dirty.size) return;
+  const lines: string[] = [];
+  for (const [letter, files] of dirty) {
+    for (const file of files) lines.push(`${letter} ${file}`);
+  }
+  const shown = lines.slice(0, DIRTY_PREFLIGHT_LIMIT);
+  const suffix =
+    lines.length > DIRTY_PREFLIGHT_LIMIT ? ` … +${lines.length - DIRTY_PREFLIGHT_LIMIT}` : "";
+  log("  preflight: uncommitted changes in exported sources:");
+  for (const line of shown) log(`    ${line}`);
+  throw new GitOperationError(
+    "preflight",
+    `exported sources have uncommitted changes: ${shown.join(", ")}${suffix} — commit them, export --from-head, or pass --allow-dirty`,
+  );
 }
 
 /**
@@ -211,7 +241,7 @@ export async function materializeHeadWorktree(
   root: string,
   ref: string,
   logger?: Logger,
-): Promise<{ dir: string; ref: string; cleanup: () => Promise<void> }> {
+): Promise<{ dir: string; cleanup: () => Promise<void> }> {
   const log = logger?.log ?? console.log;
   let sha: string;
   try {
@@ -237,7 +267,6 @@ export async function materializeHeadWorktree(
   log(`  source worktree: ${dir} @ ${sha.slice(0, 9)}`);
   return {
     dir,
-    ref: sha,
     cleanup: async () => {
       try {
         execFileSync("git", ["worktree", "remove", "--force", dir], { cwd: root, stdio: "pipe" });

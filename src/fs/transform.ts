@@ -510,17 +510,14 @@ export function generateCiWorkflow(
   // setup-node's cache needs a committed lockfile — skip it when none ships.
   const cacheLines = lockfileShips ? [`          cache: ${cacheKey}`] : [];
 
-  // pnpm/action-setup@v6 defaults package-manager-cache: true, which resolves
-  // the lockfile itself — disable it too when no lockfile ships.
+  // pnpm/action-setup@v6's `cache` input defaults true and injects
+  // `package-manager-cache: true` into setup-node, which then hard-fails on a
+  // missing lockfile — disable it too when no lockfile ships.
   const pnpmSetup =
     pm === "pnpm"
       ? lockfileShips
         ? ["      - uses: pnpm/action-setup@v6"]
-        : [
-            "      - uses: pnpm/action-setup@v6",
-            "        with:",
-            "          package-manager-cache: false",
-          ]
+        : ["      - uses: pnpm/action-setup@v6", "        with:", "          cache: false"]
       : [];
 
   const ciSetupSteps = [

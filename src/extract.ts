@@ -61,6 +61,7 @@ import { runPostProcess } from "./postprocess/index.js";
 import {
   assertCleanSource,
   commitExport,
+  ensureNpmTokenSecret,
   materializeHeadWorktree,
   transferGitHistory,
 } from "./fs/git.js";
@@ -519,6 +520,12 @@ async function exportMonorepo(
     logger.log("Skipping git history transfer (git.history: false)");
   }
 
+  // 15d. Publish-secret bootstrap — before the first push, so generated CI's
+  // publish job finds NPM_TOKEN on a fresh repo (RFC-0132, best-effort).
+  if (config.git?.autoPush && config.git?.remote && (config.ci?.publish ?? true)) {
+    ensureNpmTokenSecret(config.git.remote, logger);
+  }
+
   // 16. Git commit + push
   emit({ phase: "gitCommit", message: changelogCommitMessage });
   const gitResult = await commitExport(dest, changelogCommitMessage, config.git, logger);
@@ -698,6 +705,11 @@ async function exportStandalonePackage(
   const pathPrefixes = [config.projectDir];
   emit({ phase: "gitHistory", pathPrefixes });
   await transferGitHistory(root, dest, pathPrefixes, logger);
+
+  // 6d. Publish-secret bootstrap — before the first push (RFC-0132).
+  if (config.git?.autoPush && config.git?.remote && (config.ci?.publish ?? true)) {
+    ensureNpmTokenSecret(config.git.remote, logger);
+  }
 
   // 7. Git commit + push
   emit({ phase: "gitCommit", message: changelogCommitMessage });

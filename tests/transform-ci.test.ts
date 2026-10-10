@@ -266,6 +266,8 @@ describe("fixStandalonePackageJson", () => {
       },
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+    // RFC-0132: a shipped test file keeps the script untolerant (no --passWithNoTests)
+    await writeFile(path.join(tmpDir, "x.test.ts"), "");
 
     await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 
@@ -342,6 +344,8 @@ describe("fixStandalonePackageJson", () => {
       packageManager: "pnpm@10.33.0",
     };
     await writeFile(path.join(tmpDir, "package.json"), JSON.stringify(pkg, null, 2));
+    // RFC-0132: a shipped test file keeps the script untolerant
+    await writeFile(path.join(tmpDir, "x.test.ts"), "");
 
     await fixStandalonePackageJson(tmpDir, baseConfig, "pnpm");
 

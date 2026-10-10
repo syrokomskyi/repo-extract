@@ -13,11 +13,12 @@
   <item>Fix: Split generateCiWorkflow into ci + publish jobs — publish only on push to main, with registry-url for NODE_AUTH_TOKEN.</item>
   <item>ADR-0082: preservePackages workspace:* deps now pin to ^&lt;sourceVersion&gt; instead of * — extracted lockfiles resolve the just-published sibling under pnpm minimumReleaseAge.</item>
   <item>RFC-1081: Added gh release create step after npm publish with --generate-notes and || true for tag collision. Updated publish job permissions to contents: write. (Ported back from standalone repo — was committed there directly on 2026-09-13.)</item>
+  <item>RFC-0132: standalone manifest self-healing — ensureTypecheckScript (build+--noEmit), ensureRepositoryField (from git.remote), ensureTestScriptTolerant (--passWithNoTests when no test files ship).</item>
 </CHANGE_SUMMARY>
 */
 
 import { readFile, writeFile, rm, access, readdir } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import * as path from "node:path";
 import type { Dirent } from "node:fs";
 import type { ExtractConfig, PackageManager, CiConfig } from "../types.js";
@@ -756,12 +757,109 @@ export async function fixStandalonePackageJson(
     }
   }
 
+  // RFC-0132: heal the manifest against the generated-CI and npm-provenance
+  // contracts — see ensureTypecheckScript / ensureRepositoryField /
+  // ensureTestScriptTolerant for the exact shapes.
+  if (ensureTypecheckScript(pkg, logger)) changed = true;
+  if (ensureRepositoryField(pkg, config.git?.remote, logger)) changed = true;
+  if (!hasAnyTestFiles(dest) && ensureTestScriptTolerant(pkg, logger)) changed = true;
+
   if (changed) {
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
     (logger?.log ?? console.log)(
       "  fixed standalone package.json (test script, workspace deps, packageManager)",
     );
   }
+}
+
+/**
+ * RFC-0132: generated CI always runs `<pm> run typecheck`. When the source
+ * manifest has no typecheck script but builds via a single `tsc -p <file>`
+ * invocation, synthesize `typecheck` as the same command plus `--noEmit`.
+ * Only a single tsc invocation is rewritten — composed builds (`a && b`)
+ * would append the flag to the wrong segment and stay a human fix.
+ */
+export function ensureTypecheckScript(
+  pkg: { scripts?: Record<string, string> },
+  logger?: Logger,
+): boolean {
+  const scripts = pkg.scripts;
+  if (!scripts || typeof scripts.typecheck === "string" || typeof scripts.build !== "string") {
+    return false;
+  }
+  const build = scripts.build.trim();
+  if (/&&|\|\||;/.test(build) || !/(pnpm exec )?tsc -p \S+/.test(build)) return false;
+  scripts.typecheck = `${build} --noEmit`;
+  (logger?.log ?? console.log)(`  healed scripts.typecheck: "${scripts.typecheck}"`);
+  return true;
+}
+
+/**
+ * RFC-0132: `npm publish --provenance` verifies package.json repository.url
+ * against the Actions repo slug. Synthesize the field from git.remote when
+ * absent — accepting `git@host:owner/repo(.git)` and
+ * `https://host/owner/repo(.git)`. A declared-but-mismatched repository is
+ * left untouched: wrong data is a human decision, not a healing target.
+ */
+export function ensureRepositoryField(
+  pkg: { repository?: unknown },
+  remote: string | undefined,
+  logger?: Logger,
+): boolean {
+  if (!remote || pkg.repository !== undefined) return false;
+  const m =
+    remote.match(/^[a-z]+@([^:/]+):([^/]+)\/(.+?)(?:\.git)?$/) ??
+    remote.match(/^https?:\/\/([^/]+)\/([^/]+)\/(.+?)(?:\.git)?$/);
+  if (!m) return false;
+  const [, host, owner, repo] = m;
+  pkg.repository = { type: "git", url: `git+https://${host}/${owner}/${repo}.git` };
+  (logger?.log ?? console.log)(`  healed repository: git+https://${host}/${owner}/${repo}.git`);
+  return true;
+}
+
+const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/;
+
+/**
+ * RFC-0132: scan the exported tree for test files. Exclusion rules can strip
+ * a package's whole test surface; the answer decides whether the test script
+ * needs --passWithNoTests.
+ */
+export function hasAnyTestFiles(dir: string): boolean {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const e of entries) {
+    if (e.name === "node_modules" || e.name === ".git") continue;
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      if (hasAnyTestFiles(full)) return true;
+    } else if (TEST_FILE_RE.test(e.name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * RFC-0132: vitest exits 1 on an empty suite, and generated CI always runs
+ * the test step. When the export ships no test files, make the script
+ * tolerate it — shipping a later test file restores real coverage.
+ */
+export function ensureTestScriptTolerant(
+  pkg: { scripts?: Record<string, string> },
+  logger?: Logger,
+): boolean {
+  const test = pkg.scripts?.test;
+  if (typeof test !== "string" || test.includes("passWithNoTests")) return false;
+  if (!/vitest|jest/.test(test)) return false;
+  pkg.scripts!.test = `${test} --passWithNoTests`;
+  (logger?.log ?? console.log)(
+    `  healed scripts.test: "${pkg.scripts!.test}" (no test files in export)`,
+  );
+  return true;
 }
 
 async function rewriteWorkspaceSpecifier(

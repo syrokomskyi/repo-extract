@@ -11,10 +11,11 @@
   <item>RFC-0074: Wrapped execFileSync calls with GitOperationError. Changed commitExport return to { committed, pushed }.</item>
   <item>RFC-0075: Added Windows multi-prefix guard in transferGitHistory().</item>
   <item>RFC-0131: Added assertCleanSource (dirty preflight), materializeHeadWorktree (--from-head), and git.autoReconcile ours-merge retry in commitExport.</item>
+  <item>RFC-0132: Added ensureNpmTokenSecret — best-effort NPM_TOKEN bootstrap on the extract repo before first push, sourced from ~/.npmrc.</item>
 </CHANGE_SUMMARY>
 */
 
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, rmSync, readFileSync } from "node:fs";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
@@ -298,6 +299,70 @@ export async function materializeHeadWorktree(
       }
     },
   };
+}
+
+/**
+ * RFC-0132: fresh extract repos ship no secrets, so the generated workflow's
+ * first `npm publish` fails ENEEDAUTH. When the remote is a GitHub repo and
+ * `gh` is available, ensure an NPM_TOKEN secret exists — sourced from the
+ * operator's own ~/.npmrc authToken. Fully best-effort: every failure mode
+ * degrades to a logged hint, never a failed export.
+ */
+export function ensureNpmTokenSecret(remote: string | undefined, logger?: Logger): void {
+  const log = logger?.log ?? console.log;
+  const error = logger?.error ?? console.error;
+  const slug =
+    remote?.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/) ??
+    remote?.match(/^https?:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/);
+  if (!remote || !slug) {
+    if (remote) log(`  npm-token: non-GitHub remote "${remote}" — set NPM_TOKEN manually`);
+    return;
+  }
+  const repo = `${slug[1]}/${slug[2]}`;
+  try {
+    execFileSync("gh", ["--version"], { stdio: "pipe" });
+  } catch {
+    log(
+      `  npm-token: gh CLI not available — set NPM_TOKEN on ${repo} manually before first publish`,
+    );
+    return;
+  }
+  try {
+    const out = execFileSync("gh", ["secret", "list", "--repo", repo], {
+      stdio: "pipe",
+    }).toString();
+    if (/\bNPM_TOKEN\b/.test(out)) {
+      log(`  npm-token: NPM_TOKEN already set on ${repo}`);
+      return;
+    }
+  } catch (err) {
+    error(
+      `  npm-token: cannot list secrets on ${repo} (${err instanceof Error ? err.message.slice(0, 120) : err}) — set NPM_TOKEN manually`,
+    );
+    return;
+  }
+  let token: string | undefined;
+  try {
+    const npmrc = readFileSync(path.join(os.homedir(), ".npmrc"), "utf-8");
+    token = npmrc.match(/^\/\/registry\.npmjs\.org\/:_authToken=(\S+)/m)?.[1];
+  } catch {
+    /* no readable npmrc */
+  }
+  if (!token) {
+    log(`  npm-token: no authToken in ~/.npmrc — set NPM_TOKEN on ${repo} manually`);
+    return;
+  }
+  try {
+    execFileSync("gh", ["secret", "set", "NPM_TOKEN", "--repo", repo], {
+      input: token,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    log(`  npm-token: NPM_TOKEN set on ${repo} from ~/.npmrc`);
+  } catch (err) {
+    error(
+      `  npm-token: gh secret set failed on ${repo} (${err instanceof Error ? err.message.slice(0, 120) : err}) — set NPM_TOKEN manually`,
+    );
+  }
 }
 
 export function getLastExportDate(dest: string): string | null {

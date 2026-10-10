@@ -2,6 +2,12 @@
 
 All notable changes to the `repo-extract` project are documented here.
 
+## 1.4.6 — 2026-10-10
+
+### Fixed
+
+- Lockfile-less CI now emits `package-manager-cache: false` on `actions/setup-node@v5` itself — `pnpm/action-setup@v6` injects `package-manager-cache: true` into setup-node's resolved inputs even when the action's own `cache` input is `false`, so the override must live on the setup-node step (observed on werkstatt-shared CI run 38010851754/765771f17).
+
 ## 1.4.5 — 2026-10-10
 
 ### Fixed

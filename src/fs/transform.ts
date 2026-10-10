@@ -508,11 +508,14 @@ export function generateCiWorkflow(
   const testCmd = pm === "pnpm" ? "pnpm test" : pm === "yarn" ? "yarn test" : "npm test";
   const cacheKey = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
   // setup-node's cache needs a committed lockfile — skip it when none ships.
-  const cacheLines = lockfileShips ? [`          cache: ${cacheKey}`] : [];
+  // pnpm/action-setup@v6's `cache` (default true) also injects
+  // `package-manager-cache: true` into setup-node's resolved inputs, which
+  // hard-fails on a missing lockfile — the override must land on setup-node
+  // itself; action-setup's own `cache: false` does not retract the injection.
+  const cacheLines = lockfileShips
+    ? [`          cache: ${cacheKey}`]
+    : ["          package-manager-cache: false"];
 
-  // pnpm/action-setup@v6's `cache` input defaults true and injects
-  // `package-manager-cache: true` into setup-node, which then hard-fails on a
-  // missing lockfile — disable it too when no lockfile ships.
   const pnpmSetup =
     pm === "pnpm"
       ? lockfileShips

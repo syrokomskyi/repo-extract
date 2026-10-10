@@ -2,6 +2,12 @@
 
 All notable changes to the `repo-extract` project are documented here.
 
+## 1.4.1 — 2026-10-10
+
+### Fixed
+
+- `--no-push` now actually suppresses the push: commander maps the negated flag to `opts.push === false`, so the previous `opts.noPush` read was always `undefined` and `autoPush` still fired before orchestrated verification (observed in the werkstatt `publish:forge` run — the destination pushed inside `extractProject` instead of after it).
+
 ## 1.4.0 — 2026-10-10
 
 ### Added

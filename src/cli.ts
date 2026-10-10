@@ -45,7 +45,9 @@ program
       fromHead?: boolean;
       ref?: string;
       allowDirty?: boolean;
-      noPush?: boolean;
+      // commander maps `--no-push` to `opts.push === false` (negated flag),
+      // not `opts.noPush` — reading `opts.noPush` would silently auto-push.
+      push?: boolean;
     }) => {
       if (!opts.config) {
         console.error("Error: --config is required");
@@ -62,7 +64,7 @@ program
           fromHead: opts.fromHead,
           ref: opts.ref,
           allowDirty: opts.allowDirty,
-          noPush: opts.noPush,
+          noPush: opts.push === false,
         });
       } catch (err) {
         if (err instanceof SecretScanError) {

@@ -446,8 +446,14 @@ async function exportMonorepo(
   // 13. Generate lockfile
   logger.log(`Generating ${pm} lockfile...`);
   const installBin = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
+  // --ignore-workspace: when the dest dir sits inside another pnpm workspace
+  // (e.g. pipelines self-export under packages/packages/), plain `install`
+  // resolves the ancestor workspace root and writes the lockfile THERE —
+  // dest ships without a lockfile and CI's --frozen-lockfile fails.
   const installArgs =
-    pm === "pnpm" ? ["install", "--config.dangerouslyAllowAllBuilds=true"] : ["install"];
+    pm === "pnpm"
+      ? ["install", "--ignore-workspace", "--config.dangerouslyAllowAllBuilds=true"]
+      : ["install"];
   try {
     execFileSync(installBin, installArgs, { cwd: dest, stdio: "pipe" });
     logger.log(`  generated ${pm} lockfile`);
@@ -606,8 +612,12 @@ async function exportStandalonePackage(
   // 4d. Generate lockfile
   logger.log(`Generating ${pm} lockfile...`);
   const installBin = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
+  // --ignore-workspace: see step 13 above — dest inside an ancestor workspace
+  // would otherwise route the install to the root and ship no lockfile.
   const installArgs =
-    pm === "pnpm" ? ["install", "--config.dangerouslyAllowAllBuilds=true"] : ["install"];
+    pm === "pnpm"
+      ? ["install", "--ignore-workspace", "--config.dangerouslyAllowAllBuilds=true"]
+      : ["install"];
   try {
     execFileSync(installBin, installArgs, { cwd: dest, stdio: "pipe" });
     logger.log(`  generated ${pm} lockfile`);

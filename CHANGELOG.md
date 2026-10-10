@@ -2,11 +2,12 @@
 
 All notable changes to the `repo-extract` project are documented here.
 
-## 1.4.1 — 2026-10-10
+## 1.4.2 — 2026-10-10
 
 ### Fixed
 
 - `--no-push` now actually suppresses the push: commander maps the negated flag to `opts.push === false`, so the previous `opts.noPush` read was always `undefined` and `autoPush` still fired before orchestrated verification (observed in the werkstatt `publish:forge` run — the destination pushed inside `extractProject` instead of after it).
+- Lockfile generation passes `--ignore-workspace` to `pnpm install` — a destination nested inside another pnpm workspace previously routed the install to the ancestor workspace root, so the export shipped without `pnpm-lock.yaml` and CI's `--frozen-lockfile` install failed (observed in the repo-extract self-export under `packages/packages/`).
 
 ## 1.4.0 — 2026-10-10
 

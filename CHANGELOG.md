@@ -2,6 +2,12 @@
 
 All notable changes to the `repo-extract` project are documented here.
 
+## 1.4.4 — 2026-10-10
+
+### Fixed
+
+- Lockfile-less CI additionally emits `package-manager-cache: false` on `pnpm/action-setup@v6` — its `true` default resolves `pnpm-lock.yaml` on its own and failed `werkstatt-shared`'s CI before install even after `setup-node`'s `cache:` was omitted.
+
 ## 1.4.3 — 2026-10-10
 
 ### Fixed

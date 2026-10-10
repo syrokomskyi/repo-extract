@@ -18,7 +18,7 @@
 */
 
 import { stat, cp, mkdir, writeFile, readFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import type {
@@ -472,11 +472,15 @@ async function exportMonorepo(
   logger.log("Cleaning stray artifacts...");
   await cleanStrayArtifacts(dest);
 
-  // 14b. Generate CI workflow
+  // 14b. Generate CI workflow — lockfile presence decides frozen-install/cache
   logger.log("Generating CI workflow...");
   const ciDir = path.join(dest, ".github", "workflows");
   await mkdir(ciDir, { recursive: true });
-  const ciContent = generateCiWorkflow(pm, config.ci);
+  const lockfileName =
+    pm === "pnpm" ? "pnpm-lock.yaml" : pm === "yarn" ? "yarn.lock" : "package-lock.json";
+  const ciContent = generateCiWorkflow(pm, config.ci, {
+    lockfileShips: existsSync(path.join(dest, lockfileName)),
+  });
   if (ciContent) {
     await writeFile(path.join(ciDir, "ci.yml"), ciContent);
     logger.log("  generated .github/workflows/ci.yml");
@@ -656,11 +660,15 @@ async function exportStandalonePackage(
     await runPostProcess(ctx, config.postProcess, emit, logger);
   }
 
-  // 5b. Generate CI workflow
+  // 5b. Generate CI workflow — lockfile presence decides frozen-install/cache
   logger.log("Generating CI workflow...");
   const ciDir = path.join(dest, ".github", "workflows");
   await mkdir(ciDir, { recursive: true });
-  const ciContent = generateCiWorkflow(pm, config.ci);
+  const lockfileName =
+    pm === "pnpm" ? "pnpm-lock.yaml" : pm === "yarn" ? "yarn.lock" : "package-lock.json";
+  const ciContent = generateCiWorkflow(pm, config.ci, {
+    lockfileShips: existsSync(path.join(dest, lockfileName)),
+  });
   if (ciContent) {
     await writeFile(path.join(ciDir, "ci.yml"), ciContent);
     logger.log("  generated .github/workflows/ci.yml");

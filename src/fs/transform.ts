@@ -482,21 +482,33 @@ export async function cleanStrayArtifacts(dest: string): Promise<void> {
   await cleanDeep(dest);
 }
 
-export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | null {
+export function generateCiWorkflow(
+  pm: PackageManager,
+  ci?: CiConfig,
+  opts?: { lockfileShips?: boolean },
+): string | null {
   if (ci?.provider === "none") return null;
 
   const nodeVersion = ci?.nodeVersion ?? 22;
   const publish = ci?.publish ?? true;
+  // Lockfile may be excluded from the export (e.g. it embeds a local `link:`
+  // dep that cannot resolve on CI). Emitting `cache: <pm>`/`--frozen-lockfile`
+  // for a lockfile-less repo fails before install even starts.
+  const lockfileShips = opts?.lockfileShips ?? true;
 
   const installCmd =
     pm === "pnpm"
-      ? "pnpm install --frozen-lockfile --config.dangerouslyAllowAllBuilds=true"
+      ? `pnpm install ${lockfileShips ? "--frozen-lockfile " : "--no-frozen-lockfile "}--config.dangerouslyAllowAllBuilds=true`
       : pm === "yarn"
-        ? "yarn install --frozen-lockfile"
-        : "npm ci";
+        ? `yarn install${lockfileShips ? " --frozen-lockfile" : ""}`
+        : lockfileShips
+          ? "npm ci"
+          : "npm install";
   const runPrefix = pm === "pnpm" ? "pnpm run" : pm === "yarn" ? "yarn" : "npm run";
   const testCmd = pm === "pnpm" ? "pnpm test" : pm === "yarn" ? "yarn test" : "npm test";
   const cacheKey = pm === "pnpm" ? "pnpm" : pm === "yarn" ? "yarn" : "npm";
+  // setup-node's cache needs a committed lockfile — skip it when none ships.
+  const cacheLines = lockfileShips ? [`          cache: ${cacheKey}`] : [];
 
   const pnpmSetup = pm === "pnpm" ? ["      - uses: pnpm/action-setup@v6"] : [];
 
@@ -506,7 +518,7 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
     "      - uses: actions/setup-node@v5",
     "        with:",
     `          node-version: ${nodeVersion}`,
-    `          cache: ${cacheKey}`,
+    ...cacheLines,
     `      - run: ${installCmd}`,
   ];
 
@@ -558,7 +570,7 @@ export function generateCiWorkflow(pm: PackageManager, ci?: CiConfig): string | 
       "      - uses: actions/setup-node@v5",
       "        with:",
       `          node-version: ${nodeVersion}`,
-      `          cache: ${cacheKey}`,
+      ...cacheLines,
       "          registry-url: https://registry.npmjs.org",
       `      - run: ${installCmd}`,
       `      - run: ${runPrefix} build`,

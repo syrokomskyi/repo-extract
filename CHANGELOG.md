@@ -2,6 +2,12 @@
 
 All notable changes to the `repo-extract` project are documented here.
 
+## 1.4.3 — 2026-10-10
+
+### Fixed
+
+- Generated `ci.yml` no longer assumes a lockfile ships: when the export's lockfile is absent at workflow-generation time (e.g. `excludePathSegments`/`postProcess` drop `pnpm-lock.yaml` because it embeds a local `link:` dep), the workflow omits `cache: <pm>` from `setup-node` and installs with `--no-frozen-lockfile`/`npm install` instead of failing at setup-node's "Dependencies lock file is not found".
+
 ## 1.4.2 — 2026-10-10
 
 ### Fixed

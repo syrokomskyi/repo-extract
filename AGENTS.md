@@ -3,9 +3,8 @@
   This file is generated but editable — your changes are preserved on regeneration.
   Owner command: forge.agents.generate
   Edit instead: the forge.agents.generate generator source (not this file).
-  Regenerate:   forge forge.agents.generate
+  Regenerate:   forge agents.generate
 -->
-
 
 # `@warpgogol/repo-extract` — Agent Guide
 

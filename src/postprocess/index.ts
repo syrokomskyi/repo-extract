@@ -6,8 +6,8 @@
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Initial post-process rule runner for RFC-0070.</item>
   <item>RFC-0074: Added optional onProgress callback for per-rule progress events.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
 </CHANGE_SUMMARY>
 */
 

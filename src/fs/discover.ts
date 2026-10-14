@@ -6,8 +6,8 @@
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Ported discoverPackageDeps from scripts/export-clients-helpers.ts for RFC-0070. Supports both @syrokomskyi/ and @warpgogol/ prefixes.</item>
   <item>ADR-0082: added resolveSourceVersion — reads a workspace package's version from the source monorepo so preserved deps can be pinned to ^&lt;sourceVersion&gt;.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
 </CHANGE_SUMMARY>
 */
 

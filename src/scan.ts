@@ -6,8 +6,8 @@
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Initial secret scanner: AWS keys, private keys, generic tokens, pre-signed S3 URLs.</item>
   <item>RFC-0075: removed duplicate SecretFinding interface (import from types.ts). Consolidated inline import to top-level.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
 </CHANGE_SUMMARY>
 */
 

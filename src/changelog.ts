@@ -6,9 +6,9 @@
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Initial changelog integration for RFC-0070. Uses dynamic import to gracefully handle missing peer dep.</item>
   <item>RFC-0073: consolidated getLastExportDate — removed local duplicate, imports from fs/git.js.</item>
   <item>RFC-0075: removed dead tryAiCommitMessage() function and unused getLastExportDate import.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
 </CHANGE_SUMMARY>
 */
 

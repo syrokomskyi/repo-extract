@@ -6,14 +6,12 @@
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Ported transformPackageJson, fixPackageTsconfigs, fixAppTsconfigs, regenerateTsconfigBase, generateRootFiles from scripts/export-clients-helpers.ts for RFC-0070.</item>
-  <item>ADR-0010: added lint step, npm publish --provenance, and id-token: write to generateCiWorkflow()</item>
-  <item>RFC-0071: Replaced hardcoded org-specific values with config-driven options (stripScopes, preservePackages, rootPackageName, customConditions, onlyBuiltDependencies, packageManager, gitignoreMode).</item>
   <item>RFC-0072: Parameterized buildRootPackageJson, generateRootFiles, generateCiWorkflow, fixStandalonePackageJson for pnpm/npm/yarn support.</item>
-  <item>Fix: Split generateCiWorkflow into ci + publish jobs — publish only on push to main, with registry-url for NODE_AUTH_TOKEN.</item>
   <item>ADR-0082: preservePackages workspace:* deps now pin to ^&lt;sourceVersion&gt; instead of * — extracted lockfiles resolve the just-published sibling under pnpm minimumReleaseAge.</item>
   <item>RFC-1081: Added gh release create step after npm publish with --generate-notes and || true for tag collision. Updated publish job permissions to contents: write. (Ported back from standalone repo — was committed there directly on 2026-09-13.)</item>
   <item>RFC-0132: standalone manifest self-healing — ensureTypecheckScript (build+--noEmit), ensureRepositoryField (from git.remote), ensureTestScriptTolerant (--passWithNoTests when no test files ship).</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
+  <history>ADR-0010, RFC-0071</history>
 </CHANGE_SUMMARY>
 */
 

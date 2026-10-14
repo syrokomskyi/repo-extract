@@ -1,6 +1,6 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Minimal logging abstraction — gates console output on verbose flag for library-grade use.</purpose>
+<purpose>log — minimal logging abstraction — gates console output on verbose flag for library-grade use.</purpose>
 <non-goals>
   <item>Does not implement structured logging or log levels beyond log/error.</item>
   <item>Does not depend on external logging libraries.</item>
@@ -8,6 +8,7 @@
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
   <item>RFC-0074: Initial logger — Logger interface and createLogger factory.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
 </CHANGE_SUMMARY>
 */
 

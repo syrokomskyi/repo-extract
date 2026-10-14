@@ -6,12 +6,12 @@
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Initial git helpers for RFC-0070. Ported commitExport from scripts/export-clients.ts.</item>
-  <item>RFC-0073: replaced all execSync with execFileSync (argument arrays) to eliminate shell injection.</item>
   <item>RFC-0074: Wrapped execFileSync calls with GitOperationError. Changed commitExport return to { committed, pushed }.</item>
   <item>RFC-0075: Added Windows multi-prefix guard in transferGitHistory().</item>
   <item>RFC-0131: Added assertCleanSource (dirty preflight), materializeHeadWorktree (--from-head), and git.autoReconcile ours-merge retry in commitExport.</item>
   <item>RFC-0132: Added ensureNpmTokenSecret — best-effort NPM_TOKEN bootstrap on the extract repo before first push, sourced from ~/.npmrc.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
+  <history>RFC-0073</history>
 </CHANGE_SUMMARY>
 */
 

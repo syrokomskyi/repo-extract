@@ -7,9 +7,9 @@
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Initial CLI for RFC-0070. Supports --config, --dest, --dry-run, --verbose flags.</item>
   <item>RFC-0074: Catch SecretScanError, GitOperationError, PackageManagerError and exit with code 1. Pass verbose: true.</item>
   <item>RFC-0131: Added --from-head, --ref, --allow-dirty, --no-push flags.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
 </CHANGE_SUMMARY>
 */
 

@@ -1,19 +1,17 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Core extraction orchestrator — monorepo and standalone modes. for reliable use by its direct callers and maintainers.</purpose>
+<purpose>extract — core extraction orchestrator — monorepo and standalone modes. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not parse CLI args (see cli.ts).</item>
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Initial extractProject orchestrator for RFC-0070. Ports main() and exportStandalonePackage() from scripts/export-clients.ts.</item>
-  <item>RFC-0071: Replaced hardcoded destBase, AI files, copyDirs defaults with config-driven options. Pass config to transform functions.</item>
-  <item>RFC-0072: Added detectPackageManager, parameterized install command, CI workflow, and all transform functions for pnpm/npm/yarn.</item>
   <item>RFC-0073: replaced execSync with execFileSync (argument arrays) to eliminate shell injection.</item>
   <item>RFC-0074: Replaced process.exit(1) with SecretScanError. Changed return type to Promise<ExtractResult>. Added progress events, logger, PackageManagerError wrapping.</item>
   <item>RFC-0075: Consolidated all inline await import("node:fs*") to top-level static imports.</item>
-  <item>Fix: Added lockfile generation to exportStandalonePackage — standalone packages need lockfiles for --frozen-lockfile in CI.</item>
   <item>RFC-0131: Clean-source extraction — dirty preflight via assertCleanSource, --from-head/--ref via materializeHeadWorktree, versionBump×head conflict rejection, --no-push autoPush override.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
+  <history>RFC-0071, RFC-0072</history>
 </CHANGE_SUMMARY>
 */
 

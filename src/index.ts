@@ -1,15 +1,15 @@
 /*
 <MODULE_CONTRACT>
-<purpose>Public API exports for @warpgogol/repo-extract. for reliable use by its direct callers and maintainers.</purpose>
+<purpose>index — public API exports for @warpgogol/repo-extract. for reliable use by its direct callers and maintainers.</purpose>
 <non-goals>
   <item>Does not implement CLI parsing (see cli.ts).</item>
   <item>Does not implement config loading (see config.ts).</item>
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Initial scaffold for RFC-0070.</item>
   <item>RFC-0074: Added diffSummary, buildGitignore, buildRootPackageJson, isIgnored, ExtractResult, ExtractProgressEvent, ProgressCallback, error class exports.</item>
   <item>RFC-0131: Added assertCleanSource and materializeHeadWorktree exports.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
 </CHANGE_SUMMARY>
 */
 

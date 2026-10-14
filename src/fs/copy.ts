@@ -7,10 +7,10 @@
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Ported copyFiltered, copyStandalonePackage, removeDest from scripts/export-clients-helpers.ts for RFC-0070.</item>
   <item>RFC-0071: Split IGNORE_DIRS into BASE_IGNORE_DIRS (org-neutral) and config-driven ignoreDirs. MONOREPO_CONFIG_FILES kept as auto-detect candidate list.</item>
   <item>RFC-0072: Extended IGNORE_FILES with package-lock.json and yarn.lock. Added getMonorepoConfigFiles(pm) to filter pnpm-workspace.yaml for npm/yarn.</item>
   <item>RFC-0075: Consolidated inline import in truncateCsv to top-level. Made isKeyMaterial/isDbFile configurable via excludePathSegments/excludeExtensions.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
 </CHANGE_SUMMARY>
 */
 

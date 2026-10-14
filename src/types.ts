@@ -7,12 +7,12 @@
 </non-goals>
 </MODULE_CONTRACT>
 <CHANGE_SUMMARY>
-  <item>Initial types for RFC-0070: ExtractConfig, ExtractContext, PostProcessRule.</item>
-  <item>RFC-0071: Added stripScopes, preservePackages, rootPackageName, customConditions, aiEcosystemFiles, monorepoConfigFiles, onlyBuiltDependencies, destBase, packageManager, gitignoreMode fields.</item>
   <item>RFC-0072: Changed packageManager from string to PackageManager enum. Added CiConfig interface and ci field.</item>
   <item>RFC-0074: Added ExtractResult, ExtractProgressEvent, ProgressCallback types. Added onProgress to ExtractOptions.</item>
   <item>RFC-0075: Added excludePathSegments and excludeExtensions fields for config-driven file exclusion.</item>
   <item>RFC-0131: Added source/allowDirty config fields, git.autoReconcile, and ExtractOptions fromHead/ref/allowDirty/noPush for clean-source extraction and push reconciliation.</item>
+  <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
+  <history>RFC-0071</history>
 </CHANGE_SUMMARY>
 */
 

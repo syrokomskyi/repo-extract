@@ -26,7 +26,11 @@ function gitInit(cwd: string): void {
 }
 
 function gitLog(cwd: string): string {
-  return execFileSync("git", ["log", "--oneline"], { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+  return execFileSync("git", ["log", "--oneline"], {
+    cwd,
+    encoding: "utf-8",
+    stdio: ["pipe", "pipe", "pipe"],
+  }).trim();
 }
 
 describe("security: shell injection prevention", () => {

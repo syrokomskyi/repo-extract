@@ -2,12 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdir, writeFile, rm, readdir } from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
-import {
-  copyStandalonePackage,
-  copyFiltered,
-  isKeyMaterial,
-  isDbFile,
-} from "../src/fs/copy.js";
+import { copyStandalonePackage, copyFiltered, isKeyMaterial, isDbFile } from "../src/fs/copy.js";
 
 let tmpRoot: string;
 let tmpDest: string;
@@ -102,13 +97,7 @@ describe("copyFiltered with excludePathSegments and excludeExtensions", () => {
     await mkdir(path.join(tmpRoot, subDir, "src"), { recursive: true });
     await writeFile(path.join(tmpRoot, subDir, "src", "index.ts"), "export {};\n");
 
-    const count = await copyFiltered(
-      tmpRoot,
-      tmpDest,
-      subDir,
-      undefined,
-      ["secrets"],
-    );
+    const count = await copyFiltered(tmpRoot, tmpDest, subDir, undefined, ["secrets"]);
     expect(count).toBe(1);
 
     await expect(readdir(path.join(tmpDest, subDir, "secrets"))).rejects.toThrow();
@@ -121,14 +110,7 @@ describe("copyFiltered with excludePathSegments and excludeExtensions", () => {
     await writeFile(path.join(srcDir, "index.ts"), "export {};\n");
     await writeFile(path.join(srcDir, "data.sqlite"), "sqlite\n");
 
-    const count = await copyFiltered(
-      tmpRoot,
-      tmpDest,
-      subDir,
-      undefined,
-      undefined,
-      [".sqlite"],
-    );
+    const count = await copyFiltered(tmpRoot, tmpDest, subDir, undefined, undefined, [".sqlite"]);
     expect(count).toBe(1);
 
     const destEntries = await readdir(path.join(tmpDest, subDir, "src"));

@@ -16,7 +16,10 @@ afterEach(async () => {
 });
 
 async function mkdtemp(): Promise<string> {
-  const dir = path.join(os.tmpdir(), `repo-extract-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const dir = path.join(
+    os.tmpdir(),
+    `repo-extract-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   await mkdir(dir, { recursive: true });
   return dir;
 }
@@ -61,7 +64,12 @@ describe("runPostProcess", () => {
     };
 
     const rules: PostProcessRule[] = [
-      { action: "patch", file: "data.ts", find: "codebook-observatory-*.yaml", replace: "codebook.yaml" },
+      {
+        action: "patch",
+        file: "data.ts",
+        find: "codebook-observatory-*.yaml",
+        replace: "codebook.yaml",
+      },
     ];
 
     await runPostProcess(ctx, rules);
@@ -108,9 +116,7 @@ describe("runPostProcess", () => {
       packageDirs: [],
     };
 
-    const rules: PostProcessRule[] = [
-      { action: "delete", path: "old-file.txt" },
-    ];
+    const rules: PostProcessRule[] = [{ action: "delete", path: "old-file.txt" }];
 
     await runPostProcess(ctx, rules);
 

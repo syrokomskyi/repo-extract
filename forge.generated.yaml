@@ -1,0 +1,3 @@
+schema: forge/generated@1
+generator: repo-extract
+source: git@github.com:syrokomskyi/pipelines.git#packages/repo-extract

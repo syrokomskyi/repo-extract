@@ -9,14 +9,14 @@
   <item>RFC-0073: replaced execSync with execFileSync (argument arrays) to eliminate shell injection.</item>
   <item>RFC-0074: Replaced process.exit(1) with SecretScanError. Changed return type to Promise<ExtractResult>. Added progress events, logger, PackageManagerError wrapping.</item>
   <item>RFC-0075: Consolidated all inline await import("node:fs*") to top-level static imports.</item>
-  <item>RFC-0131: Clean-source extraction — dirty preflight via assertCleanSource, --from-head/--ref via materializeHeadWorktree, versionBump×head conflict rejection, --no-push autoPush override.</item>
+  <item>RFC-0131: Clean-source extraction — dirty preflight via assertCleanSource, --from-head/--ref via materializeHeadWorktree, versionBump×head conflict rejection, --no-push autoPush override; opt-in locked destination preflight.</item>
   <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
   <history>RFC-0071, RFC-0072</history>
 </CHANGE_SUMMARY>
 */
 
 import { stat, cp, mkdir, writeFile, readFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, lstatSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import type {
@@ -115,6 +115,55 @@ export async function extractProject(
   const destBase =
     config.destBase ?? (config.projectDir.startsWith("packages/") ? "packages" : "exports");
   const dest = options.dest ?? path.resolve(realRoot, "..", destBase, config.destName);
+
+  // Validate before dry-run, source materialization, or destination cleanup.
+  // Opt-in keeps other consumers' explicit destination workflows unchanged.
+  if (config.lockDestination) {
+    const segment = (value: string) =>
+      value.length > 0 &&
+      value !== "." &&
+      value !== ".." &&
+      !/[\\/]/.test(value) &&
+      !path.isAbsolute(value);
+    if (!segment(destBase) || !segment(config.destName)) {
+      fail(
+        new GitOperationError(
+          "preflight",
+          "Locked destination requires single directory names for destBase and destName",
+        ),
+      );
+    }
+    const container = path.resolve(realRoot, "..", destBase);
+    const expected = path.join(container, config.destName);
+    if (path.resolve(dest) !== expected) {
+      fail(
+        new GitOperationError(
+          "preflight",
+          `Destination is locked to ${expected}; remove the destination override`,
+        ),
+      );
+    }
+    const legacy = path.resolve(realRoot, "..", config.destName);
+    if (lstatSync(legacy, { throwIfNoEntry: false })) {
+      fail(
+        new GitOperationError(
+          "preflight",
+          `Misplaced export exists at ${legacy}; relocate it to ${expected} before exporting`,
+        ),
+      );
+    }
+    for (const candidate of [container, expected]) {
+      const entry = lstatSync(candidate, { throwIfNoEntry: false });
+      if (entry && (!entry.isDirectory() || entry.isSymbolicLink())) {
+        fail(
+          new GitOperationError(
+            "preflight",
+            `Export destination must be a real directory, not a symlink or file: ${candidate}`,
+          ),
+        );
+      }
+    }
+  }
 
   // RFC-0131: the export reads more than projectDir — declared copy/app/package
   // dirs, root-level config/ecosystem files (explicit or the pm-derived

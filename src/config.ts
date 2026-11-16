@@ -8,7 +8,7 @@
 <CHANGE_SUMMARY>
   <item>RFC-0072: Changed packageManager from string to enum. Added CiConfigSchema and ci field.</item>
   <item>RFC-0075: Added excludePathSegments and excludeExtensions fields.</item>
-  <item>ADR-0016: Config schema is the single source of truth — all org-specific values are config fields with org-neutral defaults, no behavioral assumptions baked into source code.</item>
+  <item>ADR-0016: Config schema is the single source of truth — all org-specific values are config fields with org-neutral defaults, no behavioral assumptions baked into source code; opt-in lockDestination placement policy.</item>
   <item>RFC-0131: Added git.autoReconcile, source, allowDirty fields.</item>
   <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
   <history>RFC-0071</history>
@@ -96,6 +96,7 @@ const ExtractConfigSchema = z.object({
   monorepoConfigFiles: z.array(z.string()).optional(),
   onlyBuiltDependencies: z.array(z.string()).default([]),
   destBase: z.string().optional(),
+  lockDestination: z.boolean().optional(),
   packageManager: z.enum(["pnpm", "npm", "yarn"]).optional(),
   ci: CiConfigSchema.optional(),
   gitignoreMode: z.enum(["minimal", "extended"]).default("extended"),

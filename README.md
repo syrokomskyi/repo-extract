@@ -198,3 +198,15 @@ This package originated from production engineering work at [Warpgogol](https://
 We publish reusable parts of our infrastructure when they can be useful beyond our own projects. It is published independently of any Warpgogol commercial service. Using this package does not create any dependency on Warpgogol.
 
 Built for real systems. Shared openly.
+
+### Locked export placement
+
+Set `lockDestination: true` with `destBase: packages` to require exports at `../packages/<destName>` relative to the source repository cwd. Both names must be single directory names. The exporter rejects a different CLI/API destination, symlink/file destinations or containers, and a leftover `../<destName>` copy. These checks run before any writes, including during `--dry-run`. Existing consumers without this option retain their destination override behavior.
+
+The four pipeline SDK export configs enable this check. Run from the `pipelines` repository root (or its sibling session worktree), for example:
+
+```sh
+pnpm exec node --import tsx packages/repo-extract/src/cli.ts --config packages/pipeline/pipeline-core/extract.config.yaml --from-head --no-push --dry-run
+```
+
+Omit `--dry-run` for an authorized local export. Publishing is a separate step; keep `--no-push` for local work. No superfolder launcher is required.

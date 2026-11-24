@@ -524,6 +524,9 @@ export function generateCiWorkflow(
 
   const ciSetupSteps = [
     "      - uses: actions/checkout@v5",
+    "        with:",
+    // Full history: exported packages' tests may clone the repo (shallow fails).
+    "          fetch-depth: 0",
     ...pnpmSetup,
     "      - uses: actions/setup-node@v5",
     "        with:",
@@ -539,6 +542,8 @@ export function generateCiWorkflow(
   buildSteps.push(
     `      - run: ${runPrefix} lint`,
     `      - run: ${runPrefix} typecheck`,
+    // Exported tests may probe ~/.ssh/config; runners ship no ~/.ssh dir.
+    "      - run: mkdir -p ~/.ssh",
     `      - run: ${testCmd}`,
   );
 
@@ -557,7 +562,7 @@ export function generateCiWorkflow(
     "jobs:",
     "  ci:",
     "    runs-on: ubuntu-latest",
-    "    timeout-minutes: 15",
+    "    timeout-minutes: 30",
     "    steps:",
     ...ciSetupSteps,
     ...buildSteps,

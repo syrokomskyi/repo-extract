@@ -2,6 +2,16 @@
 
 All notable changes to the `repo-extract` project are documented here.
 
+## 1.6.0 — 2026-11-25
+
+### Added
+
+- `ci.skipTests` config field (RFC-0175): omits the test step and its `~/.ssh` provision from generated export CI. For heavyweight suites the export-side re-run only re-verifies what monorepo gates already tested pre-export — install/build/lint/typecheck stay as the extraction-fidelity gate. Opt-in, default off: existing exports regenerate byte-identical CI. Adopted by `@warpgogol/forge`, whose 474-file suite (~200 cpu-min) outgrew any sane CI job timeout and cancelled the 9.7.1 publish twice.
+
+### Fixed
+
+- Generated CI widened for test-heavy exports (already in source since 2026-11-24, first shipped in this release): `fetch-depth: 0` on checkout (exported tests may clone the repo), `mkdir -p ~/.ssh` before the test step (runners ship no `~/.ssh`), ci job timeout raised 15→30 minutes.
+
 ## 1.4.6 — 2026-10-10
 
 ### Fixed

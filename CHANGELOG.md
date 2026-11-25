@@ -10,6 +10,7 @@ All notable changes to the `repo-extract` project are documented here.
 
 ### Fixed
 
+- Export no longer ships the monorepo-bound `destination-real-configs.test.ts` — the real-config probes stay full-strength in the monorepo suite but produced guaranteed ENOENT failures in the standalone repo (export CI run 45630057330). The portable `destination.test.ts` coverage continues to ship.
 - Generated CI widened for test-heavy exports (already in source since 2026-11-24, first shipped in this release): `fetch-depth: 0` on checkout (exported tests may clone the repo), `mkdir -p ~/.ssh` before the test step (runners ship no `~/.ssh`), ci job timeout raised 15→30 minutes.
 
 ## 1.4.6 — 2026-10-10

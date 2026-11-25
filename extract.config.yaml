@@ -16,6 +16,13 @@ stripScopes:
 preservePackages:
   - "@warpgogol/repo-extract"
 packageManager: "pnpm"
+# Monorepo-bound tests — they probe real sibling pipeline-* extract configs
+# that exist only in the source monorepo layout. They stay full-strength in
+# the monorepo suite; shipping them produces guaranteed ENOENT failures in
+# the standalone repo (1.6.0 export CI run 45630057330).
+excludePathSegments:
+  - destination-real-configs.test.ts
+
 ignoreDirs:
   - .output
   - .debug

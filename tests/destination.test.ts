@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { extractProject } from "../src/extract.js";
-import { ExtractConfigSchema, loadConfig } from "../src/config.js";
+import { ExtractConfigSchema } from "../src/config.js";
 
 let sandbox: string;
 let root: string;
@@ -100,14 +100,4 @@ describe("locked destination preflight", () => {
     );
     expect(result.dest).toBe(dest);
   });
-  it.each(["core", "ai", "node", "steps"])(
-    "enables protection in the real pipeline-%s config",
-    async (name) => {
-      const loaded = await loadConfig(
-        new URL(`../../pipeline/pipeline-${name}/extract.config.yaml`, import.meta.url).pathname,
-      );
-      expect(loaded.lockDestination).toBe(true);
-      expect(loaded.destBase).toBe("packages");
-    },
-  );
 });

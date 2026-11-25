@@ -10,6 +10,7 @@
   <item>RFC-0075: Added excludePathSegments and excludeExtensions fields.</item>
   <item>ADR-0016: Config schema is the single source of truth — all org-specific values are config fields with org-neutral defaults, no behavioral assumptions baked into source code; opt-in lockDestination placement policy.</item>
   <item>RFC-0131: Added git.autoReconcile, source, allowDirty fields.</item>
+  <item>RFC-0175: Added ci.skipTests field.</item>
   <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
   <history>RFC-0071</history>
 </CHANGE_SUMMARY>
@@ -76,6 +77,7 @@ const CiConfigSchema = z.object({
   deploy: CloudflarePagesDeploySchema.optional(),
   workspaceFilter: z.string().optional(),
   skipBuild: z.boolean().optional(),
+  skipTests: z.boolean().optional(),
 });
 
 const ExtractConfigSchema = z.object({

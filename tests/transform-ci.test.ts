@@ -171,6 +171,40 @@ describe("generateCiWorkflow", () => {
     expect(yaml).toContain("pnpm run typecheck");
   });
 
+  // RFC-0175: ci.skipTests — the export-side re-run is opt-out for trees the
+  // monorepo gates already verified pre-export.
+  it("omits the test step and ~/.ssh provision when skipTests is true", () => {
+    const yaml = generateCiWorkflow("pnpm", {
+      provider: "github-actions",
+      publish: false,
+      nodeVersion: 22,
+      skipTests: true,
+    })!;
+    expect(yaml).not.toContain("pnpm test");
+    expect(yaml).not.toContain("mkdir -p ~/.ssh");
+    expect(yaml).toContain("pnpm run build");
+    expect(yaml).toContain("pnpm run lint");
+    expect(yaml).toContain("pnpm run typecheck");
+  });
+
+  it("keeps the test step by default when skipTests is not set", () => {
+    const yaml = generateCiWorkflow("pnpm")!;
+    expect(yaml).toContain("pnpm test");
+    expect(yaml).toContain("mkdir -p ~/.ssh");
+  });
+
+  it("keeps the publish job wired to ci when skipTests is true", () => {
+    const yaml = generateCiWorkflow("pnpm", {
+      provider: "github-actions",
+      publish: true,
+      nodeVersion: 22,
+      skipTests: true,
+    })!;
+    expect(yaml).toContain("  publish:");
+    expect(yaml).toContain("    needs: ci");
+    expect(yaml).toContain("npm publish --provenance");
+  });
+
   it("includes gh release create step after npm publish", () => {
     const yaml = generateCiWorkflow("pnpm")!;
     expect(yaml).toContain("gh release create");

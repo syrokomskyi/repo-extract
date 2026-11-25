@@ -11,6 +11,7 @@
   <item>RFC-0074: Added ExtractResult, ExtractProgressEvent, ProgressCallback types. Added onProgress to ExtractOptions.</item>
   <item>RFC-0075: Added excludePathSegments and excludeExtensions fields for config-driven file exclusion; optional lockDestination for export placement.</item>
   <item>RFC-0131: Added source/allowDirty config fields, git.autoReconcile, and ExtractOptions fromHead/ref/allowDirty/noPush for clean-source extraction and push reconciliation.</item>
+  <item>RFC-0175: Added ci.skipTests — omit the export-side test re-run for trees the monorepo gates already verified.</item>
   <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
   <history>RFC-0071</history>
 </CHANGE_SUMMARY>
@@ -39,6 +40,13 @@ export interface CiConfig {
   deploy?: DeployConfig;
   workspaceFilter?: string;
   skipBuild?: boolean;
+  /**
+   * RFC-0175: omit the test step (and its ~/.ssh provision) from the generated
+   * CI workflow. For heavyweight suites the export-side re-run re-verifies a
+   * tree the monorepo gates already tested pre-export — install/build/lint/
+   * typecheck stay as the extraction-fidelity gate. Default: off.
+   */
+  skipTests?: boolean;
 }
 
 export type PostProcessAction = "copy" | "patch" | "delete";

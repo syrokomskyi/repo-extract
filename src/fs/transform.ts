@@ -10,6 +10,7 @@
   <item>ADR-0082: preservePackages workspace:* deps now pin to ^&lt;sourceVersion&gt; instead of * — extracted lockfiles resolve the just-published sibling under pnpm minimumReleaseAge.</item>
   <item>RFC-1081: Added gh release create step after npm publish with --generate-notes and || true for tag collision. Updated publish job permissions to contents: write. (Ported back from standalone repo — was committed there directly on 2026-09-13.)</item>
   <item>RFC-0132: standalone manifest self-healing — ensureTypecheckScript (build+--noEmit), ensureRepositoryField (from git.remote), ensureTestScriptTolerant (--passWithNoTests when no test files ship).</item>
+  <item>RFC-0175: generateCiWorkflow honors ci.skipTests — no test step, no ~/.ssh provision.</item>
   <item>ADR-0034: compass v2 baseline repair — CHANGE_SUMMARY trim and/or purpose token rewrite</item>
   <history>ADR-0010, RFC-0071</history>
 </CHANGE_SUMMARY>
@@ -539,13 +540,16 @@ export function generateCiWorkflow(
   if (!ci?.skipBuild) {
     buildSteps.push(`      - run: ${runPrefix} build`);
   }
-  buildSteps.push(
-    `      - run: ${runPrefix} lint`,
-    `      - run: ${runPrefix} typecheck`,
-    // Exported tests may probe ~/.ssh/config; runners ship no ~/.ssh dir.
-    "      - run: mkdir -p ~/.ssh",
-    `      - run: ${testCmd}`,
-  );
+  buildSteps.push(`      - run: ${runPrefix} lint`, `      - run: ${runPrefix} typecheck`);
+  // RFC-0175: ci.skipTests omits the export-side test re-run (and its ~/.ssh
+  // provision) — heavyweight suites re-verify what monorepo gates already ran.
+  if (!ci?.skipTests) {
+    buildSteps.push(
+      // Exported tests may probe ~/.ssh/config; runners ship no ~/.ssh dir.
+      "      - run: mkdir -p ~/.ssh",
+      `      - run: ${testCmd}`,
+    );
+  }
 
   const lines: string[] = [
     "name: CI",
